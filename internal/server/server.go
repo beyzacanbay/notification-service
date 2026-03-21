@@ -1,12 +1,13 @@
 package server
 
 import (
-	"github.com/beyzacanbay/notification-service/internal/handler"
-
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/beyzacanbay/notification-service/internal/handler"
+	"github.com/beyzacanbay/notification-service/internal/queue"
 )
 
-func NewServer() *fiber.App {
+func NewServer(producer *queue.Producer) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "Notification System",
 		ServerHeader: "Fiber",
@@ -16,7 +17,7 @@ func NewServer() *fiber.App {
 	app.Get("/health", healthHandler.Liveness)
 	app.Get("/ready", healthHandler.Readiness)
 
-	notificationHandler := handler.NewNotificationHandler()
+	notificationHandler := handler.NewNotificationHandler(producer)
 
 	api := app.Group("/api/v1")
 	notificationHandler.RegisterRoutes(api.Group("/notifications"))

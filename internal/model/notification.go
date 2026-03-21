@@ -22,6 +22,30 @@ func (c Channel) IsValid() bool {
 	return false
 }
 
+type Priority int
+
+const (
+	PriorityHigh   Priority = 0
+	PriorityNormal Priority = 1
+	PriorityLow    Priority = 2
+)
+
+func (p Priority) IsValid() bool {
+	return p >= PriorityHigh && p <= PriorityLow
+}
+
+func (p Priority) String() string {
+	switch p {
+	case PriorityHigh:
+		return "high"
+	case PriorityNormal:
+		return "normal"
+	case PriorityLow:
+		return "low"
+	}
+	return "normal"
+}
+
 type Status string
 
 const (
@@ -36,6 +60,7 @@ type Notification struct {
 	Channel   Channel   `json:"channel"`
 	Recipient string    `json:"recipient"`
 	Content   string    `json:"content"`
+	Priority  Priority  `json:"priority"`
 	Status    Status    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 }
