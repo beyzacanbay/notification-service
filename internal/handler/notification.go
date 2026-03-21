@@ -31,6 +31,7 @@ func (h *NotificationHandler) RegisterRoutes(r fiber.Router) {
 	r.Post("/", h.Create)
 	r.Post("/batch", h.CreateBatch)
 	r.Get("/", h.List)
+	r.Get("/batch/:batchId/status", h.GetBatchStatus)
 	r.Get("/:id", h.GetByID)
 	r.Get("/:id/status", h.GetStatus)
 	r.Patch("/:id/cancel", h.Cancel)
@@ -229,6 +230,36 @@ func (h *NotificationHandler) Cancel(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "notification cancelled"})
+}
+
+func (h *NotificationHandler) GetBatchStatus(c *fiber.Ctx) error {
+	batchID, err := uuid.Parse(c.Params("batchId"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{Error: "invalid batch ID"})
+	}
+
+	notifications, err := h.repo.GetByBatchID(c.UserContext(), batchID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error:   "failed to get batch",
+			Details: err.Error(),
+		})
+	}
+
+	if len(notifications) == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(dto.ErrorResponse{Error: "batch not found"})
+	}
+
+	counts := make(map[string]int)
+	for _, n := range notifications {
+		counts[string(n.Status)]++
+	}
+
+	return c.JSON(fiber.Map{
+		"batch_id": batchID,
+		"total":    len(notifications),
+		"statuses": counts,
+	})
 }
 
 func (h *NotificationHandler) List(c *fiber.Ctx) error {

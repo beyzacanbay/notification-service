@@ -63,6 +63,16 @@ func (m *mockRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Notification
 	return nil, repository.ErrNotFound
 }
 
+func (m *mockRepo) GetByBatchID(_ context.Context, batchID uuid.UUID) ([]*model.Notification, error) {
+	var result []*model.Notification
+	for _, n := range m.notifications {
+		if n.BatchID != nil && *n.BatchID == batchID {
+			result = append(result, n)
+		}
+	}
+	return result, nil
+}
+
 func (m *mockRepo) List(_ context.Context, _ *dto.ListNotificationsRequest) ([]*model.Notification, int64, error) {
 	var result []*model.Notification
 	for _, n := range m.notifications {
@@ -77,6 +87,10 @@ func (m *mockRepo) UpdateStatus(_ context.Context, id uuid.UUID, status model.St
 		return nil
 	}
 	return repository.ErrNotFound
+}
+
+func (m *mockRepo) GetMetrics(_ context.Context) (*dto.MetricsResponse, error) {
+	return &dto.MetricsResponse{}, nil
 }
 
 func (m *mockRepo) seedNotification(status model.Status) *model.Notification {

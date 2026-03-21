@@ -91,6 +91,26 @@ func (r *postgresNotificationRepo) GetByID(ctx context.Context, id uuid.UUID) (*
 	return n, nil
 }
 
+func (r *postgresNotificationRepo) GetByBatchID(ctx context.Context, batchID uuid.UUID) ([]*model.Notification, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, batch_id, channel, recipient, content, priority, status, created_at, updated_at
+		FROM notifications WHERE batch_id = $1 ORDER BY created_at`, batchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notifications []*model.Notification
+	for rows.Next() {
+		n := &model.Notification{}
+		if err := rows.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, err
+		}
+		notifications = append(notifications, n)
+	}
+	return notifications, rows.Err()
+}
+
 func (r *postgresNotificationRepo) List(ctx context.Context, filter *dto.ListNotificationsRequest) ([]*model.Notification, int64, error) {
 	filter.SetDefaults()
 
@@ -161,4 +181,31 @@ func (r *postgresNotificationRepo) UpdateStatus(ctx context.Context, id uuid.UUI
 		"UPDATE notifications SET status = $1 WHERE id = $2",
 		status, id)
 	return err
+}
+
+func (r *postgresNotificationRepo) GetMetrics(ctx context.Context) (*dto.MetricsResponse, error) {
+	metrics := &dto.MetricsResponse{}
+
+	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM notifications WHERE status = 'sent'").Scan(&metrics.TotalSent)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM notifications WHERE status = 'failed'").Scan(&metrics.TotalFailed)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM notifications WHERE status IN ('pending', 'queued')").Scan(&metrics.TotalPending)
+	if err != nil {
+		return nil, err
+	}
+
+	total := metrics.TotalSent + metrics.TotalFailed
+	if total > 0 {
+		metrics.SuccessRate = float64(metrics.TotalSent) / float64(total) * 100
+		metrics.FailureRate = float64(metrics.TotalFailed) / float64(total) * 100
+	}
+
+	return metrics, nil
 }

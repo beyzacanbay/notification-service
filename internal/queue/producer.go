@@ -32,3 +32,7 @@ func (p *Producer) Enqueue(ctx context.Context, id uuid.UUID) error {
 
 	return nil
 }
+
+func (p *Producer) GetQueueDepth(ctx context.Context) (int64, error) {
+	return p.client.ZCard(ctx, QueueName).Result()
+}
