@@ -5,9 +5,10 @@ import (
 
 	"github.com/beyzacanbay/notification-service/internal/handler"
 	"github.com/beyzacanbay/notification-service/internal/queue"
+	"github.com/beyzacanbay/notification-service/internal/repository"
 )
 
-func NewServer(producer *queue.Producer) *fiber.App {
+func NewServer(repo repository.NotificationRepository, producer *queue.Producer) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "Notification System",
 		ServerHeader: "Fiber",
@@ -17,7 +18,7 @@ func NewServer(producer *queue.Producer) *fiber.App {
 	app.Get("/health", healthHandler.Liveness)
 	app.Get("/ready", healthHandler.Readiness)
 
-	notificationHandler := handler.NewNotificationHandler(producer)
+	notificationHandler := handler.NewNotificationHandler(repo, producer)
 
 	api := app.Group("/api/v1")
 	notificationHandler.RegisterRoutes(api.Group("/notifications"))

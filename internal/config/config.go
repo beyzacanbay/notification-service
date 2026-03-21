@@ -7,8 +7,23 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig
-	Redis  RedisConfig
+	Server   ServerConfig
+	Database DatabaseConfig
+	Redis    RedisConfig
+}
+
+type DatabaseConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Name     string
+	SSLMode  string
+}
+
+func (d DatabaseConfig) DSN() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)
 }
 
 type ServerConfig struct {
@@ -30,6 +45,14 @@ func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
 			Port: getEnvInt("SERVER_PORT", 8081),
+		},
+		Database: DatabaseConfig{
+			Host:     getEnv("DB_HOST", "localhost"),
+			Port:     getEnvInt("DB_PORT", 5432),
+			User:     getEnv("DB_USER", "postgres"),
+			Password: getEnv("DB_PASSWORD", "postgres"),
+			Name:     getEnv("DB_NAME", "notifications"),
+			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
 		},
 		Redis: RedisConfig{
 			Host:     getEnv("REDIS_HOST", "localhost"),
