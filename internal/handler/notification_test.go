@@ -48,6 +48,16 @@ func (m *mockRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Notification
 	return nil, repository.ErrNotFound
 }
 
+func (m *mockRepo) CreateBatch(_ context.Context, notifications []*model.Notification) error {
+	if m.err != nil {
+		return m.err
+	}
+	for _, n := range notifications {
+		m.notifications[n.ID] = n
+	}
+	return nil
+}
+
 func (m *mockRepo) UpdateStatus(_ context.Context, id uuid.UUID, status model.Status) error {
 	if n, ok := m.notifications[id]; ok {
 		n.Status = status

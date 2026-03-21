@@ -50,18 +50,20 @@ type Status string
 
 const (
 	StatusPending   Status = "pending"
+	StatusQueued    Status = "queued"
 	StatusSent      Status = "sent"
 	StatusFailed    Status = "failed"
 	StatusCancelled Status = "cancelled"
 )
 
 type Notification struct {
-	ID        uuid.UUID `json:"id"`
-	Channel   Channel   `json:"channel"`
-	Recipient string    `json:"recipient"`
-	Content   string    `json:"content"`
-	Priority  Priority  `json:"priority"`
-	Status    Status    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uuid.UUID  `json:"id"`
+	BatchID   *uuid.UUID `json:"batch_id,omitempty"`
+	Channel   Channel    `json:"channel"`
+	Recipient string     `json:"recipient"`
+	Content   string     `json:"content"`
+	Priority  Priority   `json:"priority"`
+	Status    Status     `json:"status"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
