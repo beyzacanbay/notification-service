@@ -23,8 +23,8 @@ func NewPostgresNotificationRepo(pool *pgxpool.Pool) NotificationRepository {
 }
 
 const insertSQL = `
-	INSERT INTO notifications (id, batch_id, channel, recipient, content, priority, status, attempt_count, max_attempts, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	INSERT INTO notifications (id, batch_id, idempotency_key, channel, recipient, content, priority, status, attempt_count, max_attempts, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
 
 func (r *postgresNotificationRepo) Create(ctx context.Context, n *model.Notification) error {
 	if n.ID == uuid.Nil {
@@ -33,8 +33,13 @@ func (r *postgresNotificationRepo) Create(ctx context.Context, n *model.Notifica
 	n.CreatedAt = time.Now()
 	n.UpdatedAt = time.Now()
 
+	var idemKey *string
+	if n.IdempotencyKey != "" {
+		idemKey = &n.IdempotencyKey
+	}
+
 	_, err := r.pool.Exec(ctx, insertSQL,
-		n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
+		n.ID, n.BatchID, idemKey, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
 	return err
 }
 
@@ -59,8 +64,13 @@ func (r *postgresNotificationRepo) CreateBatch(ctx context.Context, notification
 		n.CreatedAt = now
 		n.UpdatedAt = now
 
+		var idemKey *string
+		if n.IdempotencyKey != "" {
+			idemKey = &n.IdempotencyKey
+		}
+
 		batch.Queue(insertSQL,
-			n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
+			n.ID, n.BatchID, idemKey, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
 	}
 
 	br := tx.SendBatch(ctx, batch)
@@ -75,11 +85,15 @@ func (r *postgresNotificationRepo) CreateBatch(ctx context.Context, notification
 	return tx.Commit(ctx)
 }
 
-const selectColumns = `id, batch_id, channel, recipient, content, priority, status, attempt_count, max_attempts, last_error, sent_at, created_at, updated_at`
+const selectColumns = `id, batch_id, idempotency_key, channel, recipient, content, priority, status, attempt_count, max_attempts, last_error, sent_at, created_at, updated_at`
 
 func scanNotification(row pgx.Row) (*model.Notification, error) {
 	n := &model.Notification{}
-	err := row.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt)
+	var idemKey *string
+	err := row.Scan(&n.ID, &n.BatchID, &idemKey, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt)
+	if idemKey != nil {
+		n.IdempotencyKey = *idemKey
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +104,12 @@ func scanNotifications(rows pgx.Rows) ([]*model.Notification, error) {
 	var notifications []*model.Notification
 	for rows.Next() {
 		n := &model.Notification{}
-		if err := rows.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		var idemKey *string
+		if err := rows.Scan(&n.ID, &n.BatchID, &idemKey, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, err
+		}
+		if idemKey != nil {
+			n.IdempotencyKey = *idemKey
 		}
 		notifications = append(notifications, n)
 	}
@@ -100,6 +118,11 @@ func scanNotifications(rows pgx.Rows) ([]*model.Notification, error) {
 
 func (r *postgresNotificationRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Notification, error) {
 	row := r.pool.QueryRow(ctx, fmt.Sprintf("SELECT %s FROM notifications WHERE id = $1", selectColumns), id)
+	return scanNotification(row)
+}
+
+func (r *postgresNotificationRepo) GetByIdempotencyKey(ctx context.Context, key string) (*model.Notification, error) {
+	row := r.pool.QueryRow(ctx, fmt.Sprintf("SELECT %s FROM notifications WHERE idempotency_key = $1", selectColumns), key)
 	return scanNotification(row)
 }
 

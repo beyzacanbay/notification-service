@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -65,21 +67,35 @@ func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
+	// Idempotency: header > auto-generated hash
+	idempotencyKey := c.Get("Idempotency-Key")
+	if idempotencyKey == "" {
+		hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s", req.Channel, req.Recipient, req.Content)))
+		idempotencyKey = fmt.Sprintf("%x", hash[:16])
+	}
+
+	// Check if already exists
+	existing, err := h.repo.GetByIdempotencyKey(c.UserContext(), idempotencyKey)
+	if err == nil && existing != nil {
+		return c.Status(fiber.StatusAccepted).JSON(dto.NotificationResponse{Notification: *existing})
+	}
+
 	priority := model.PriorityNormal
 	if req.Priority != nil {
 		priority = *req.Priority
 	}
 
 	n := &model.Notification{
-		ID:          uuid.New(),
-		Channel:     req.Channel,
-		Recipient:   req.Recipient,
-		Content:     req.Content,
-		Priority:    priority,
-		Status:      model.StatusPending,
-		MaxAttempts: 3,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:             uuid.New(),
+		IdempotencyKey: idempotencyKey,
+		Channel:        req.Channel,
+		Recipient:      req.Recipient,
+		Content:        req.Content,
+		Priority:       priority,
+		Status:         model.StatusPending,
+		MaxAttempts:    3,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	if err := h.repo.Create(c.UserContext(), n); err != nil {

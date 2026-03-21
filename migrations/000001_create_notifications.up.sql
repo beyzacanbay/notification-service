@@ -1,9 +1,10 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TABLE IF NOT EXISTS notifications (
-    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    batch_id      UUID,
-    channel       VARCHAR(10) NOT NULL CHECK (channel IN ('sms', 'email', 'push')),
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    batch_id        UUID,
+    idempotency_key VARCHAR(64) UNIQUE,
+    channel         VARCHAR(10) NOT NULL CHECK (channel IN ('sms', 'email', 'push')),
     recipient     VARCHAR(255) NOT NULL,
     content       TEXT NOT NULL,
     priority      SMALLINT NOT NULL DEFAULT 1 CHECK (priority BETWEEN 0 AND 2),

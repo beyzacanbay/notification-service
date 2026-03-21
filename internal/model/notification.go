@@ -74,17 +74,18 @@ const (
 )
 
 type Notification struct {
-	ID           uuid.UUID  `json:"id"`
-	BatchID      *uuid.UUID `json:"batch_id,omitempty"`
-	Channel      Channel    `json:"channel"`
-	Recipient    string     `json:"recipient"`
-	Content      string     `json:"content"`
-	Priority     Priority   `json:"priority"`
-	Status       Status     `json:"status"`
-	AttemptCount int        `json:"attempt_count"`
-	MaxAttempts  int        `json:"max_attempts"`
-	LastError    *string    `json:"last_error,omitempty"`
-	SentAt       *time.Time `json:"sent_at,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID             uuid.UUID  `json:"id"`
+	BatchID        *uuid.UUID `json:"batch_id,omitempty"`
+	IdempotencyKey string     `json:"idempotency_key,omitempty"`
+	Channel        Channel    `json:"channel"`
+	Recipient      string     `json:"recipient"`
+	Content        string     `json:"content"`
+	Priority       Priority   `json:"priority"`
+	Status         Status     `json:"status"`
+	AttemptCount   int        `json:"attempt_count"`
+	MaxAttempts    int        `json:"max_attempts"`
+	LastError      *string    `json:"last_error,omitempty"`
+	SentAt         *time.Time `json:"sent_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }

@@ -89,6 +89,15 @@ func (m *mockRepo) UpdateStatus(_ context.Context, id uuid.UUID, status model.St
 	return repository.ErrNotFound
 }
 
+func (m *mockRepo) GetByIdempotencyKey(_ context.Context, key string) (*model.Notification, error) {
+	for _, n := range m.notifications {
+		if n.IdempotencyKey == key {
+			return n, nil
+		}
+	}
+	return nil, repository.ErrNotFound
+}
+
 func (m *mockRepo) IncrementAttempt(_ context.Context, id uuid.UUID, _ string) error {
 	if n, ok := m.notifications[id]; ok {
 		n.AttemptCount++
