@@ -1,0 +1,57 @@
+# Binaries / build
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+/dist/
+/build/
+/tmp/
+/out/
+
+# Go
+vendor/
+*.prof
+*.pprof
+cpu.prof
+mem.prof
+coverage.out
+coverage.html
+*.coverprofile
+
+# Air (live reload)
+tmp/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE / editors
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs & debug
+*.log
+logs/
+
+# Misc
+.cache/
