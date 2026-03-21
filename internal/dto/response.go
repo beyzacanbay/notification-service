@@ -9,7 +9,14 @@ type NotificationResponse struct {
 type BatchCreateResponse struct {
 	BatchID       string                 `json:"batch_id"`
 	TotalCreated  int                    `json:"total_created"`
+	TotalFailed   int                    `json:"total_failed"`
 	Notifications []NotificationResponse `json:"notifications"`
+	Errors        []BatchItemError       `json:"errors,omitempty"`
+}
+
+type BatchItemError struct {
+	Index   int         `json:"index"`
+	Details interface{} `json:"details"`
 }
 
 type PaginatedResponse struct {

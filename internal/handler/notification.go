@@ -148,9 +148,14 @@ func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 	batchID := uuid.New()
 	now := time.Now()
 	var notifications []*model.Notification
+	var batchErrors []dto.BatchItemError
 
-	for _, r := range req.Notifications {
+	for i, r := range req.Notifications {
 		if errs := validator.ValidateCreateRequest(&r); len(errs) > 0 {
+			batchErrors = append(batchErrors, dto.BatchItemError{
+				Index:   i,
+				Details: errs,
+			})
 			continue
 		}
 
@@ -175,7 +180,8 @@ func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 
 	if len(notifications) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
-			Error: "no valid notifications in batch",
+			Error:   "no valid notifications in batch",
+			Details: batchErrors,
 		})
 	}
 
@@ -193,6 +199,8 @@ func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 	resp := dto.BatchCreateResponse{
 		BatchID:      batchID.String(),
 		TotalCreated: len(notifications),
+		TotalFailed:  len(batchErrors),
+		Errors:       batchErrors,
 	}
 	for _, n := range notifications {
 		resp.Notifications = append(resp.Notifications, dto.NotificationResponse{Notification: *n})
