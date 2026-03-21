@@ -12,6 +12,7 @@ import (
 	"github.com/beyzacanbay/notification-service/internal/dto"
 	"github.com/beyzacanbay/notification-service/internal/model"
 	"github.com/beyzacanbay/notification-service/internal/repository"
+	"github.com/beyzacanbay/notification-service/internal/validator"
 )
 
 type Enqueuer interface {
@@ -57,25 +58,15 @@ func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
-	if req.Channel == "" || req.Recipient == "" || req.Content == "" {
+	if errs := validator.ValidateCreateRequest(&req); len(errs) > 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
-			Error: "channel, recipient and content are required",
-		})
-	}
-
-	if !req.Channel.IsValid() {
-		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
-			Error: "invalid channel, must be one of: sms, email, push",
+			Error:   "validation failed",
+			Details: errs,
 		})
 	}
 
 	priority := model.PriorityNormal
 	if req.Priority != nil {
-		if !req.Priority.IsValid() {
-			return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
-				Error: "invalid priority, must be 0 (high), 1 (normal) or 2 (low)",
-			})
-		}
 		priority = *req.Priority
 	}
 
@@ -143,15 +134,12 @@ func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 	var notifications []*model.Notification
 
 	for _, r := range req.Notifications {
-		if r.Channel == "" || r.Recipient == "" || r.Content == "" {
-			continue
-		}
-		if !r.Channel.IsValid() {
+		if errs := validator.ValidateCreateRequest(&r); len(errs) > 0 {
 			continue
 		}
 
 		priority := model.PriorityNormal
-		if r.Priority != nil && r.Priority.IsValid() {
+		if r.Priority != nil {
 			priority = *r.Priority
 		}
 

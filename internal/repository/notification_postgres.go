@@ -204,5 +204,14 @@ func (r *postgresNotificationRepo) GetMetrics(ctx context.Context) (*dto.Metrics
 		metrics.FailureRate = float64(metrics.TotalFailed) / float64(total) * 100
 	}
 
+	// Average latency: time between created_at and sent_at for delivered notifications
+	var avgMs *float64
+	err = r.pool.QueryRow(ctx, `
+		SELECT AVG(EXTRACT(EPOCH FROM (sent_at - created_at)) * 1000)
+		FROM notifications WHERE status = 'sent' AND sent_at IS NOT NULL`).Scan(&avgMs)
+	if err == nil && avgMs != nil {
+		metrics.AvgLatencyMs = *avgMs
+	}
+
 	return metrics, nil
 }

@@ -27,6 +27,7 @@ type MetricsResponse struct {
 	TotalPending int64            `json:"total_pending"`
 	SuccessRate  float64          `json:"success_rate"`
 	FailureRate  float64          `json:"failure_rate"`
+	AvgLatencyMs float64          `json:"avg_latency_ms"`
 }
 
 type ErrorResponse struct {
