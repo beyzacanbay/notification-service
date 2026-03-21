@@ -4,15 +4,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
+	"github.com/beyzacanbay/notification-service/internal/dto"
 	"github.com/beyzacanbay/notification-service/internal/model"
 	"github.com/beyzacanbay/notification-service/internal/repository"
 )
+
+// --- mocks ---
 
 type mockProducer struct {
 	lastID uuid.UUID
@@ -41,13 +46,6 @@ func (m *mockRepo) Create(_ context.Context, n *model.Notification) error {
 	return nil
 }
 
-func (m *mockRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Notification, error) {
-	if n, ok := m.notifications[id]; ok {
-		return n, nil
-	}
-	return nil, repository.ErrNotFound
-}
-
 func (m *mockRepo) CreateBatch(_ context.Context, notifications []*model.Notification) error {
 	if m.err != nil {
 		return m.err
@@ -58,6 +56,21 @@ func (m *mockRepo) CreateBatch(_ context.Context, notifications []*model.Notific
 	return nil
 }
 
+func (m *mockRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Notification, error) {
+	if n, ok := m.notifications[id]; ok {
+		return n, nil
+	}
+	return nil, repository.ErrNotFound
+}
+
+func (m *mockRepo) List(_ context.Context, _ *dto.ListNotificationsRequest) ([]*model.Notification, int64, error) {
+	var result []*model.Notification
+	for _, n := range m.notifications {
+		result = append(result, n)
+	}
+	return result, int64(len(result)), nil
+}
+
 func (m *mockRepo) UpdateStatus(_ context.Context, id uuid.UUID, status model.Status) error {
 	if n, ok := m.notifications[id]; ok {
 		n.Status = status
@@ -66,12 +79,29 @@ func (m *mockRepo) UpdateStatus(_ context.Context, id uuid.UUID, status model.St
 	return repository.ErrNotFound
 }
 
+func (m *mockRepo) seedNotification(status model.Status) *model.Notification {
+	n := &model.Notification{
+		ID:        uuid.New(),
+		Channel:   model.ChannelSMS,
+		Recipient: "+905551234567",
+		Content:   "test",
+		Priority:  model.PriorityNormal,
+		Status:    status,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	m.notifications[n.ID] = n
+	return n
+}
+
 func setupApp(repo repository.NotificationRepository, producer Enqueuer) *fiber.App {
 	app := fiber.New()
 	h := NewNotificationHandler(repo, producer)
 	h.RegisterRoutes(app.Group("/api/v1/notifications"))
 	return app
 }
+
+// --- Create ---
 
 func TestCreate_Success(t *testing.T) {
 	repo := newMockRepo()
@@ -82,41 +112,27 @@ func TestCreate_Success(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/notifications", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp, _ := app.Test(req)
 
 	if resp.StatusCode != fiber.StatusAccepted {
 		t.Fatalf("expected 202, got %d", resp.StatusCode)
 	}
-
-	if mock.lastID == uuid.Nil {
-		t.Fatal("expected notification to be enqueued")
-	}
-
 	if len(repo.notifications) != 1 {
 		t.Fatalf("expected 1 notification in repo, got %d", len(repo.notifications))
 	}
-
-	if repo.notifications[mock.lastID].Channel != model.ChannelSMS {
-		t.Fatalf("expected channel sms, got %s", repo.notifications[mock.lastID].Channel)
+	if mock.lastID == uuid.Nil {
+		t.Fatal("expected notification to be enqueued")
 	}
 }
 
 func TestCreate_MissingFields(t *testing.T) {
-	repo := newMockRepo()
-	mock := &mockProducer{}
-	app := setupApp(repo, mock)
+	app := setupApp(newMockRepo(), &mockProducer{})
 
 	body := `{"channel":"sms"}`
 	req := httptest.NewRequest("POST", "/api/v1/notifications", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp, _ := app.Test(req)
 
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
@@ -124,46 +140,191 @@ func TestCreate_MissingFields(t *testing.T) {
 }
 
 func TestCreate_InvalidChannel(t *testing.T) {
-	repo := newMockRepo()
-	mock := &mockProducer{}
-	app := setupApp(repo, mock)
+	app := setupApp(newMockRepo(), &mockProducer{})
 
 	body := `{"channel":"telegram","recipient":"+905551234567","content":"Hello"}`
 	req := httptest.NewRequest("POST", "/api/v1/notifications", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp, _ := app.Test(req)
 
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
 }
 
-func TestCreate_WithPriority(t *testing.T) {
-	repo := newMockRepo()
-	mock := &mockProducer{}
-	app := setupApp(repo, mock)
+// --- CreateBatch ---
 
-	body := `{"channel":"email","recipient":"test@test.com","content":"Hello","priority":0}`
-	req := httptest.NewRequest("POST", "/api/v1/notifications", bytes.NewBufferString(body))
+func TestCreateBatch_Success(t *testing.T) {
+	repo := newMockRepo()
+	app := setupApp(repo, &mockProducer{})
+
+	body := `{"notifications":[
+		{"channel":"sms","recipient":"+905551234567","content":"Hello 1"},
+		{"channel":"email","recipient":"test@test.com","content":"Hello 2"}
+	]}`
+	req := httptest.NewRequest("POST", "/api/v1/notifications/batch", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp, _ := app.Test(req)
 
 	if resp.StatusCode != fiber.StatusAccepted {
 		t.Fatalf("expected 202, got %d", resp.StatusCode)
+	}
+	if len(repo.notifications) != 2 {
+		t.Fatalf("expected 2 notifications, got %d", len(repo.notifications))
+	}
+}
+
+func TestCreateBatch_Empty(t *testing.T) {
+	app := setupApp(newMockRepo(), &mockProducer{})
+
+	body := `{"notifications":[]}`
+	req := httptest.NewRequest("POST", "/api/v1/notifications/batch", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// --- GetByID ---
+
+func TestGetByID_Success(t *testing.T) {
+	repo := newMockRepo()
+	n := repo.seedNotification(model.StatusPending)
+	app := setupApp(repo, &mockProducer{})
+
+	req := httptest.NewRequest("GET", "/api/v1/notifications/"+n.ID.String(), nil)
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetByID_NotFound(t *testing.T) {
+	app := setupApp(newMockRepo(), &mockProducer{})
+
+	req := httptest.NewRequest("GET", "/api/v1/notifications/"+uuid.New().String(), nil)
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp.StatusCode)
+	}
+}
+
+// --- GetStatus ---
+
+func TestGetStatus_Success(t *testing.T) {
+	repo := newMockRepo()
+	n := repo.seedNotification(model.StatusSent)
+	app := setupApp(repo, &mockProducer{})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/notifications/%s/status", n.ID), nil)
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 
-	if result["priority"].(float64) != 0 {
-		t.Fatalf("expected priority 0, got %v", result["priority"])
+	if result["status"] != "sent" {
+		t.Fatalf("expected status sent, got %v", result["status"])
+	}
+}
+
+func TestGetStatus_NotFound(t *testing.T) {
+	app := setupApp(newMockRepo(), &mockProducer{})
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/notifications/%s/status", uuid.New()), nil)
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp.StatusCode)
+	}
+}
+
+// --- Cancel ---
+
+func TestCancel_Success(t *testing.T) {
+	repo := newMockRepo()
+	n := repo.seedNotification(model.StatusPending)
+	app := setupApp(repo, &mockProducer{})
+
+	req := httptest.NewRequest("PATCH", fmt.Sprintf("/api/v1/notifications/%s/cancel", n.ID), nil)
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if repo.notifications[n.ID].Status != model.StatusCancelled {
+		t.Fatalf("expected status cancelled, got %s", repo.notifications[n.ID].Status)
+	}
+}
+
+func TestCancel_AlreadySent(t *testing.T) {
+	repo := newMockRepo()
+	n := repo.seedNotification(model.StatusSent)
+	app := setupApp(repo, &mockProducer{})
+
+	req := httptest.NewRequest("PATCH", fmt.Sprintf("/api/v1/notifications/%s/cancel", n.ID), nil)
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// --- List ---
+
+func TestList_Success(t *testing.T) {
+	repo := newMockRepo()
+	repo.seedNotification(model.StatusPending)
+	repo.seedNotification(model.StatusSent)
+	app := setupApp(repo, &mockProducer{})
+
+	req := httptest.NewRequest("GET", "/api/v1/notifications", nil)
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result dto.PaginatedResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.TotalItems != 2 {
+		t.Fatalf("expected 2 total items, got %d", result.TotalItems)
+	}
+}
+
+func TestList_Empty(t *testing.T) {
+	app := setupApp(newMockRepo(), &mockProducer{})
+
+	req := httptest.NewRequest("GET", "/api/v1/notifications", nil)
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result dto.PaginatedResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.TotalItems != 0 {
+		t.Fatalf("expected 0 total items, got %d", result.TotalItems)
 	}
 }

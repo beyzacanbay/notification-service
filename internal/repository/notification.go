@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/beyzacanbay/notification-service/internal/dto"
 	"github.com/beyzacanbay/notification-service/internal/model"
 )
 
@@ -15,5 +16,6 @@ type NotificationRepository interface {
 	Create(ctx context.Context, n *model.Notification) error
 	CreateBatch(ctx context.Context, notifications []*model.Notification) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Notification, error)
+	List(ctx context.Context, filter *dto.ListNotificationsRequest) ([]*model.Notification, int64, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status model.Status) error
 }

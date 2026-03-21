@@ -3,12 +3,14 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/beyzacanbay/notification-service/internal/dto"
 	"github.com/beyzacanbay/notification-service/internal/model"
 )
 
@@ -87,6 +89,71 @@ func (r *postgresNotificationRepo) GetByID(ctx context.Context, id uuid.UUID) (*
 	}
 
 	return n, nil
+}
+
+func (r *postgresNotificationRepo) List(ctx context.Context, filter *dto.ListNotificationsRequest) ([]*model.Notification, int64, error) {
+	filter.SetDefaults()
+
+	var conditions []string
+	var args []interface{}
+	argIdx := 1
+
+	if filter.Status != nil {
+		conditions = append(conditions, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, *filter.Status)
+		argIdx++
+	}
+	if filter.Channel != nil {
+		conditions = append(conditions, fmt.Sprintf("channel = $%d", argIdx))
+		args = append(args, *filter.Channel)
+		argIdx++
+	}
+	if filter.StartDate != nil {
+		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", argIdx))
+		args = append(args, *filter.StartDate)
+		argIdx++
+	}
+	if filter.EndDate != nil {
+		conditions = append(conditions, fmt.Sprintf("created_at <= $%d", argIdx))
+		args = append(args, *filter.EndDate)
+		argIdx++
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var total int64
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM notifications %s", whereClause)
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, batch_id, channel, recipient, content, priority, status, created_at, updated_at
+		FROM notifications %s
+		ORDER BY created_at DESC
+		LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1)
+
+	args = append(args, filter.PerPage, filter.Offset())
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var notifications []*model.Notification
+	for rows.Next() {
+		n := &model.Notification{}
+		if err := rows.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		notifications = append(notifications, n)
+	}
+
+	return notifications, total, rows.Err()
 }
 
 func (r *postgresNotificationRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.Status) error {

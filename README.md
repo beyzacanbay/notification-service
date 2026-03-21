@@ -15,3 +15,6 @@ curl -X POST http://localhost:8081/api/v1/notifications/batch \
     {"channel":"push","recipient":"device-token-123","content":"Hello 3","priority":0}
     ]
 }'
+
+
+  curl "http://localhost:8081/api/v1/notifications?status=pending&channel=sms&page=1&per_page=10"

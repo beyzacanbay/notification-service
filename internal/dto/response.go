@@ -12,6 +12,14 @@ type BatchCreateResponse struct {
 	Notifications []NotificationResponse `json:"notifications"`
 }
 
+type PaginatedResponse struct {
+	Data       interface{} `json:"data"`
+	Page       int         `json:"page"`
+	PerPage    int         `json:"per_page"`
+	TotalItems int64       `json:"total_items"`
+	TotalPages int         `json:"total_pages"`
+}
+
 type ErrorResponse struct {
 	Error   string      `json:"error"`
 	Details interface{} `json:"details,omitempty"`

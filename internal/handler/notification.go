@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"math"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -28,6 +30,7 @@ func NewNotificationHandler(repo repository.NotificationRepository, producer Enq
 func (h *NotificationHandler) RegisterRoutes(r fiber.Router) {
 	r.Post("/", h.Create)
 	r.Post("/batch", h.CreateBatch)
+	r.Get("/", h.List)
 	r.Get("/:id", h.GetByID)
 	r.Get("/:id/status", h.GetStatus)
 	r.Patch("/:id/cancel", h.Cancel)
@@ -226,4 +229,54 @@ func (h *NotificationHandler) Cancel(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "notification cancelled"})
+}
+
+func (h *NotificationHandler) List(c *fiber.Ctx) error {
+	filter := &dto.ListNotificationsRequest{}
+
+	if s := c.Query("status"); s != "" {
+		status := model.Status(s)
+		filter.Status = &status
+	}
+	if ch := c.Query("channel"); ch != "" {
+		channel := model.Channel(ch)
+		filter.Channel = &channel
+	}
+	if sd := c.Query("start_date"); sd != "" {
+		if t, err := time.Parse(time.RFC3339, sd); err == nil {
+			filter.StartDate = &t
+		}
+	}
+	if ed := c.Query("end_date"); ed != "" {
+		if t, err := time.Parse(time.RFC3339, ed); err == nil {
+			filter.EndDate = &t
+		}
+	}
+	if p := c.Query("page"); p != "" {
+		filter.Page, _ = strconv.Atoi(p)
+	}
+	if pp := c.Query("per_page"); pp != "" {
+		filter.PerPage, _ = strconv.Atoi(pp)
+	}
+
+	notifications, total, err := h.repo.List(c.UserContext(), filter)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error:   "failed to list notifications",
+			Details: err.Error(),
+		})
+	}
+
+	var data []dto.NotificationResponse
+	for _, n := range notifications {
+		data = append(data, dto.NotificationResponse{Notification: *n})
+	}
+
+	return c.JSON(dto.PaginatedResponse{
+		Data:       data,
+		Page:       filter.Page,
+		PerPage:    filter.PerPage,
+		TotalItems: total,
+		TotalPages: int(math.Ceil(float64(total) / float64(filter.PerPage))),
+	})
 }
