@@ -16,6 +16,11 @@ import (
 	"github.com/beyzacanbay/notification-service/internal/server"
 )
 
+// @title Notification Service API
+// @version 1.0
+// @description Event-driven notification system for processing and delivering messages through multiple channels (SMS, Email, Push).
+// @host localhost:8081
+// @BasePath /
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,

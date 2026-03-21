@@ -20,10 +20,24 @@ func NewHealthHandler(db *pgxpool.Pool, redis *redis.Client) *HealthHandler {
 	return &HealthHandler{db: db, redis: redis}
 }
 
+// Liveness godoc
+// @Summary Health check
+// @Tags Health
+// @Produce json
+// @Success 200 {object} dto.HealthResponse
+// @Router /health [get]
 func (h *HealthHandler) Liveness(c *fiber.Ctx) error {
 	return c.JSON(dto.HealthResponse{Status: "ok"})
 }
 
+// Readiness godoc
+// @Summary Readiness check
+// @Description Check if the service and its dependencies are ready
+// @Tags Health
+// @Produce json
+// @Success 200 {object} dto.HealthResponse
+// @Failure 503 {object} dto.HealthResponse
+// @Router /ready [get]
 func (h *HealthHandler) Readiness(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(c.UserContext(), 3*time.Second)
 	defer cancel()

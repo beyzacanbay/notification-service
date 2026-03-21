@@ -17,6 +17,13 @@ func NewMetricsHandler(repo repository.NotificationRepository, producer *queue.P
 	return &MetricsHandler{repo: repo, producer: producer}
 }
 
+// Metrics godoc
+// @Summary Real-time system metrics
+// @Description Queue depth, success/failure rates
+// @Tags Observability
+// @Produce json
+// @Success 200 {object} dto.MetricsResponse
+// @Router /metrics [get]
 func (h *MetricsHandler) Metrics(c *fiber.Ctx) error {
 	metrics, err := h.repo.GetMetrics(c.UserContext())
 	if err != nil {

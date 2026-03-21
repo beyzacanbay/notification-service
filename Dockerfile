@@ -19,5 +19,6 @@ WORKDIR /app
 
 COPY --from=builder /app/api .
 COPY --from=builder /app/worker .
+COPY --from=builder /app/docs ./docs
 
 EXPOSE 8081

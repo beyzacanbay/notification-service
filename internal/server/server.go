@@ -32,6 +32,10 @@ func NewServer(db *pgxpool.Pool, redisClient *redis.Client, repo repository.Noti
 	metricsHandler := handler.NewMetricsHandler(repo, producer)
 	app.Get("/metrics", metricsHandler.Metrics)
 
+	// Swagger
+	app.Get("/swagger", handler.ServeSwaggerUI)
+	app.Static("/docs", "./docs")
+
 	// API v1
 	notificationHandler := handler.NewNotificationHandler(repo, producer)
 	api := app.Group("/api/v1")

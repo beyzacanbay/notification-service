@@ -37,6 +37,17 @@ func (h *NotificationHandler) RegisterRoutes(r fiber.Router) {
 	r.Patch("/:id/cancel", h.Cancel)
 }
 
+// Create godoc
+// @Summary Create a notification
+// @Description Create a new notification request
+// @Tags Notifications
+// @Accept json
+// @Produce json
+// @Param notification body dto.CreateNotificationRequest true "Notification request"
+// @Success 202 {object} dto.NotificationResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /api/v1/notifications [post]
 func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 	var req dto.CreateNotificationRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -97,6 +108,16 @@ func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusAccepted).JSON(dto.NotificationResponse{Notification: *n})
 }
 
+// CreateBatch godoc
+// @Summary Create a batch of notifications
+// @Description Create up to 1000 notifications in a single request
+// @Tags Notifications
+// @Accept json
+// @Produce json
+// @Param batch body dto.BatchCreateRequest true "Batch request"
+// @Success 202 {object} dto.BatchCreateResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /api/v1/notifications/batch [post]
 func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 	var req dto.BatchCreateRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -176,6 +197,14 @@ func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusAccepted).JSON(resp)
 }
 
+// GetByID godoc
+// @Summary Get notification by ID
+// @Tags Notifications
+// @Produce json
+// @Param id path string true "Notification ID"
+// @Success 200 {object} dto.NotificationResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/v1/notifications/{id} [get]
 func (h *NotificationHandler) GetByID(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -190,6 +219,14 @@ func (h *NotificationHandler) GetByID(c *fiber.Ctx) error {
 	return c.JSON(dto.NotificationResponse{Notification: *n})
 }
 
+// GetStatus godoc
+// @Summary Query notification status by ID
+// @Tags Notifications
+// @Produce json
+// @Param id path string true "Notification ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/v1/notifications/{id}/status [get]
 func (h *NotificationHandler) GetStatus(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -207,6 +244,15 @@ func (h *NotificationHandler) GetStatus(c *fiber.Ctx) error {
 	})
 }
 
+// Cancel godoc
+// @Summary Cancel a pending or queued notification
+// @Tags Notifications
+// @Produce json
+// @Param id path string true "Notification ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/v1/notifications/{id}/cancel [patch]
 func (h *NotificationHandler) Cancel(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -234,6 +280,14 @@ func (h *NotificationHandler) Cancel(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "notification cancelled"})
 }
 
+// GetBatchStatus godoc
+// @Summary Get batch status summary
+// @Tags Notifications
+// @Produce json
+// @Param batchId path string true "Batch ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /api/v1/notifications/batch/{batchId}/status [get]
 func (h *NotificationHandler) GetBatchStatus(c *fiber.Ctx) error {
 	batchID, err := uuid.Parse(c.Params("batchId"))
 	if err != nil {
@@ -264,6 +318,18 @@ func (h *NotificationHandler) GetBatchStatus(c *fiber.Ctx) error {
 	})
 }
 
+// List godoc
+// @Summary List notifications with filtering and pagination
+// @Tags Notifications
+// @Produce json
+// @Param status query string false "Filter by status"
+// @Param channel query string false "Filter by channel"
+// @Param start_date query string false "Start date (RFC3339)"
+// @Param end_date query string false "End date (RFC3339)"
+// @Param page query int false "Page number" default(1)
+// @Param per_page query int false "Items per page" default(20)
+// @Success 200 {object} dto.PaginatedResponse
+// @Router /api/v1/notifications [get]
 func (h *NotificationHandler) List(c *fiber.Ctx) error {
 	filter := &dto.ListNotificationsRequest{}
 
