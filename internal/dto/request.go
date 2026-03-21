@@ -38,3 +38,16 @@ func (r *ListNotificationsRequest) SetDefaults() {
 func (r *ListNotificationsRequest) Offset() int {
 	return (r.Page - 1) * r.PerPage
 }
+
+type CreateTemplateRequest struct {
+	Name            string        `json:"name"`
+	Channel         model.Channel `json:"channel"`
+	ContentTemplate string        `json:"content_template"`
+}
+
+type SendFromTemplateRequest struct {
+	TemplateID string                 `json:"template_id"`
+	Recipient  string                 `json:"recipient"`
+	Params     map[string]interface{} `json:"params"`
+	Priority   *model.Priority        `json:"priority,omitempty"`
+}

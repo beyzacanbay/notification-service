@@ -5,16 +5,16 @@ CREATE TABLE IF NOT EXISTS notifications (
     batch_id        UUID,
     idempotency_key VARCHAR(64) UNIQUE,
     channel         VARCHAR(10) NOT NULL CHECK (channel IN ('sms', 'email', 'push')),
-    recipient     VARCHAR(255) NOT NULL,
-    content       TEXT NOT NULL,
-    priority      SMALLINT NOT NULL DEFAULT 1 CHECK (priority BETWEEN 0 AND 2),
-    status        VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'queued', 'processing', 'sent', 'failed', 'cancelled')),
-    attempt_count INT NOT NULL DEFAULT 0,
-    max_attempts  INT NOT NULL DEFAULT 3,
-    last_error    TEXT,
-    sent_at       TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    recipient       VARCHAR(255) NOT NULL,
+    content         TEXT NOT NULL,
+    priority        SMALLINT NOT NULL DEFAULT 1 CHECK (priority BETWEEN 0 AND 2),
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'queued', 'processing', 'sent', 'failed', 'cancelled')),
+    attempt_count   INT NOT NULL DEFAULT 0,
+    max_attempts    INT NOT NULL DEFAULT 3,
+    last_error      TEXT,
+    sent_at         TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_notifications_batch_id ON notifications(batch_id) WHERE batch_id IS NOT NULL;

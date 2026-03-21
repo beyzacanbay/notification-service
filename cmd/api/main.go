@@ -60,9 +60,10 @@ func main() {
 
 	// Dependencies
 	notificationRepo := repository.NewPostgresNotificationRepo(dbPool)
+	templateRepo := repository.NewPostgresTemplateRepo(dbPool)
 	producer := queue.NewProducer(redisClient)
 
-	app := server.NewServer(dbPool, redisClient, notificationRepo, producer, logger)
+	app := server.NewServer(dbPool, redisClient, notificationRepo, templateRepo, producer, logger)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	logger.Info("API server starting", "port", cfg.Server.Port)
