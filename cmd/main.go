@@ -52,7 +52,7 @@ func main() {
 	notificationRepo := repository.NewPostgresNotificationRepo(dbPool)
 	producer := queue.NewProducer(redisClient)
 
-	app := server.NewServer(notificationRepo, producer)
+	app := server.NewServer(dbPool, redisClient, notificationRepo, producer)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	slog.Info("API server starting", "port", cfg.Server.Port)

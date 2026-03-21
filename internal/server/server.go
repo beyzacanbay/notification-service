@@ -2,19 +2,21 @@ package server
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/beyzacanbay/notification-service/internal/handler"
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/repository"
 )
 
-func NewServer(repo repository.NotificationRepository, producer *queue.Producer) *fiber.App {
+func NewServer(db *pgxpool.Pool, redisClient *redis.Client, repo repository.NotificationRepository, producer *queue.Producer) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "Notification System",
 		ServerHeader: "Fiber",
 	})
 
-	healthHandler := handler.NewHealthHandler()
+	healthHandler := handler.NewHealthHandler(db, redisClient)
 	app.Get("/health", healthHandler.Liveness)
 	app.Get("/ready", healthHandler.Readiness)
 
