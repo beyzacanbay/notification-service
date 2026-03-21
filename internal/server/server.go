@@ -11,6 +11,7 @@ import (
 	"github.com/beyzacanbay/notification-service/internal/middleware"
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/repository"
+	"github.com/beyzacanbay/notification-service/internal/service"
 )
 
 func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository.NotificationRepository, templateRepo repository.TemplateRepository, producer *queue.Producer, logger *slog.Logger) *fiber.App {
@@ -36,14 +37,17 @@ func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository
 	app.Get("/swagger", handler.ServeSwaggerUI)
 	app.Static("/docs", "./docs")
 
+	// Services
+	notifSvc := service.NewNotificationService(notifRepo, producer)
+	templateSvc := service.NewTemplateService(templateRepo)
+
 	// API v1
 	api := app.Group("/api/v1")
 
-	templateHandler := handler.NewTemplateHandler(templateRepo, notifRepo, producer)
+	templateHandler := handler.NewTemplateHandler(templateSvc)
 	templateHandler.RegisterRoutes(api.Group("/templates"))
-	api.Post("/notifications/from-template", templateHandler.SendFromTemplate)
 
-	notificationHandler := handler.NewNotificationHandler(notifRepo, producer)
+	notificationHandler := handler.NewNotificationHandler(notifSvc, templateSvc)
 	notificationHandler.RegisterRoutes(api.Group("/notifications"))
 
 	return app

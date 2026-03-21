@@ -1,10 +1,6 @@
 package handler
 
 import (
-	"context"
-	"crypto/sha256"
-	"fmt"
-	"math"
 	"strconv"
 	"time"
 
@@ -13,26 +9,23 @@ import (
 
 	"github.com/beyzacanbay/notification-service/internal/dto"
 	"github.com/beyzacanbay/notification-service/internal/model"
-	"github.com/beyzacanbay/notification-service/internal/repository"
+	"github.com/beyzacanbay/notification-service/internal/service"
 	"github.com/beyzacanbay/notification-service/internal/validator"
 )
 
-type Enqueuer interface {
-	Enqueue(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel) error
-}
-
 type NotificationHandler struct {
-	repo     repository.NotificationRepository
-	producer Enqueuer
+	svc         *service.NotificationService
+	templateSvc *service.TemplateService
 }
 
-func NewNotificationHandler(repo repository.NotificationRepository, producer Enqueuer) *NotificationHandler {
-	return &NotificationHandler{repo: repo, producer: producer}
+func NewNotificationHandler(svc *service.NotificationService, templateSvc *service.TemplateService) *NotificationHandler {
+	return &NotificationHandler{svc: svc, templateSvc: templateSvc}
 }
 
 func (h *NotificationHandler) RegisterRoutes(r fiber.Router) {
 	r.Post("/", h.Create)
 	r.Post("/batch", h.CreateBatch)
+	r.Post("/from-template", h.SendFromTemplate)
 	r.Get("/", h.List)
 	r.Get("/batch/:batchId/status", h.GetBatchStatus)
 	r.Get("/:id", h.GetByID)
@@ -42,14 +35,12 @@ func (h *NotificationHandler) RegisterRoutes(r fiber.Router) {
 
 // Create godoc
 // @Summary Create a notification
-// @Description Create a new notification request
 // @Tags Notifications
 // @Accept json
 // @Produce json
 // @Param notification body dto.CreateNotificationRequest true "Notification request"
 // @Success 202 {object} dto.NotificationResponse
 // @Failure 400 {object} dto.ErrorResponse
-// @Failure 500 {object} dto.ErrorResponse
 // @Router /api/v1/notifications [post]
 func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 	var req dto.CreateNotificationRequest
@@ -67,47 +58,12 @@ func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
-	// Idempotency: header > auto-generated hash
 	idempotencyKey := c.Get("Idempotency-Key")
-	if idempotencyKey == "" {
-		hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s", req.Channel, req.Recipient, req.Content)))
-		idempotencyKey = fmt.Sprintf("%x", hash[:16])
-	}
 
-	// Check if already exists
-	existing, err := h.repo.GetByIdempotencyKey(c.UserContext(), idempotencyKey)
-	if err == nil && existing != nil {
-		return c.Status(fiber.StatusAccepted).JSON(dto.NotificationResponse{Notification: *existing})
-	}
-
-	priority := model.PriorityNormal
-	if req.Priority != nil {
-		priority = *req.Priority
-	}
-
-	n := &model.Notification{
-		ID:             uuid.New(),
-		IdempotencyKey: idempotencyKey,
-		Channel:        req.Channel,
-		Recipient:      req.Recipient,
-		Content:        req.Content,
-		Priority:       priority,
-		Status:         model.StatusPending,
-		MaxAttempts:    3,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-	}
-
-	if err := h.repo.Create(c.UserContext(), n); err != nil {
+	n, err := h.svc.Create(c.UserContext(), &req, idempotencyKey)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
-			Error:   "failed to save notification",
-			Details: err.Error(),
-		})
-	}
-
-	if err := h.producer.Enqueue(c.UserContext(), n.ID, n.Priority, n.Channel); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
-			Error:   "failed to enqueue notification",
+			Error:   "failed to create notification",
 			Details: err.Error(),
 		})
 	}
@@ -117,7 +73,6 @@ func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 
 // CreateBatch godoc
 // @Summary Create a batch of notifications
-// @Description Create up to 1000 notifications in a single request
 // @Tags Notifications
 // @Accept json
 // @Produce json
@@ -145,65 +100,12 @@ func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 		})
 	}
 
-	batchID := uuid.New()
-	now := time.Now()
-	var notifications []*model.Notification
-	var batchErrors []dto.BatchItemError
-
-	for i, r := range req.Notifications {
-		if errs := validator.ValidateCreateRequest(&r); len(errs) > 0 {
-			batchErrors = append(batchErrors, dto.BatchItemError{
-				Index:   i,
-				Details: errs,
-			})
-			continue
-		}
-
-		priority := model.PriorityNormal
-		if r.Priority != nil {
-			priority = *r.Priority
-		}
-
-		notifications = append(notifications, &model.Notification{
-			ID:          uuid.New(),
-			BatchID:     &batchID,
-			Channel:     r.Channel,
-			Recipient:   r.Recipient,
-			Content:     r.Content,
-			Priority:    priority,
-			Status:      model.StatusPending,
-			MaxAttempts: 3,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		})
-	}
-
-	if len(notifications) == 0 {
+	resp, err := h.svc.CreateBatch(c.UserContext(), &req)
+	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
-			Error:   "no valid notifications in batch",
-			Details: batchErrors,
-		})
-	}
-
-	if err := h.repo.CreateBatch(c.UserContext(), notifications); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
-			Error:   "failed to save batch",
+			Error:   "failed to create batch",
 			Details: err.Error(),
 		})
-	}
-
-	for _, n := range notifications {
-		h.producer.Enqueue(c.UserContext(), n.ID, n.Priority, n.Channel)
-	}
-
-	resp := dto.BatchCreateResponse{
-		BatchID:      batchID.String(),
-		TotalCreated: len(notifications),
-		TotalFailed:  len(batchErrors),
-		Errors:       batchErrors,
-	}
-	for _, n := range notifications {
-		resp.Notifications = append(resp.Notifications, dto.NotificationResponse{Notification: *n})
 	}
 
 	return c.Status(fiber.StatusAccepted).JSON(resp)
@@ -223,7 +125,7 @@ func (h *NotificationHandler) GetByID(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{Error: "invalid notification ID"})
 	}
 
-	n, err := h.repo.GetByID(c.UserContext(), id)
+	n, err := h.svc.GetByID(c.UserContext(), id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(dto.ErrorResponse{Error: "notification not found"})
 	}
@@ -245,7 +147,7 @@ func (h *NotificationHandler) GetStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{Error: "invalid notification ID"})
 	}
 
-	n, err := h.repo.GetByID(c.UserContext(), id)
+	n, err := h.svc.GetByID(c.UserContext(), id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(dto.ErrorResponse{Error: "notification not found"})
 	}
@@ -263,7 +165,6 @@ func (h *NotificationHandler) GetStatus(c *fiber.Ctx) error {
 // @Param id path string true "Notification ID"
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} dto.ErrorResponse
-// @Failure 404 {object} dto.ErrorResponse
 // @Router /api/v1/notifications/{id}/cancel [patch]
 func (h *NotificationHandler) Cancel(c *fiber.Ctx) error {
 	id, err := uuid.Parse(c.Params("id"))
@@ -271,22 +172,8 @@ func (h *NotificationHandler) Cancel(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{Error: "invalid notification ID"})
 	}
 
-	n, err := h.repo.GetByID(c.UserContext(), id)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(dto.ErrorResponse{Error: "notification not found"})
-	}
-
-	if n.Status != model.StatusPending && n.Status != model.StatusQueued {
-		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
-			Error: "only pending or queued notifications can be cancelled",
-		})
-	}
-
-	if err := h.repo.UpdateStatus(c.UserContext(), id, model.StatusCancelled, nil); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
-			Error:   "failed to cancel notification",
-			Details: err.Error(),
-		})
+	if err := h.svc.Cancel(c.UserContext(), id); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{Error: err.Error()})
 	}
 
 	return c.JSON(fiber.Map{"message": "notification cancelled"})
@@ -306,7 +193,7 @@ func (h *NotificationHandler) GetBatchStatus(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{Error: "invalid batch ID"})
 	}
 
-	notifications, err := h.repo.GetByBatchID(c.UserContext(), batchID)
+	counts, total, err := h.svc.GetBatchStatus(c.UserContext(), batchID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "failed to get batch",
@@ -314,18 +201,13 @@ func (h *NotificationHandler) GetBatchStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	if len(notifications) == 0 {
+	if total == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(dto.ErrorResponse{Error: "batch not found"})
-	}
-
-	counts := make(map[string]int)
-	for _, n := range notifications {
-		counts[string(n.Status)]++
 	}
 
 	return c.JSON(fiber.Map{
 		"batch_id": batchID,
-		"total":    len(notifications),
+		"total":    total,
 		"statuses": counts,
 	})
 }
@@ -370,7 +252,7 @@ func (h *NotificationHandler) List(c *fiber.Ctx) error {
 		filter.PerPage, _ = strconv.Atoi(pp)
 	}
 
-	notifications, total, err := h.repo.List(c.UserContext(), filter)
+	data, total, totalPages, err := h.svc.List(c.UserContext(), filter)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "failed to list notifications",
@@ -378,16 +260,72 @@ func (h *NotificationHandler) List(c *fiber.Ctx) error {
 		})
 	}
 
-	var data []dto.NotificationResponse
-	for _, n := range notifications {
-		data = append(data, dto.NotificationResponse{Notification: *n})
-	}
-
 	return c.JSON(dto.PaginatedResponse{
 		Data:       data,
 		Page:       filter.Page,
 		PerPage:    filter.PerPage,
 		TotalItems: total,
-		TotalPages: int(math.Ceil(float64(total) / float64(filter.PerPage))),
+		TotalPages: totalPages,
 	})
+}
+
+// SendFromTemplate godoc
+// @Summary Send notification from template
+// @Description Render a template with variables and create a notification
+// @Tags Notifications
+// @Accept json
+// @Produce json
+// @Param request body dto.SendFromTemplateRequest true "Template send request"
+// @Success 202 {object} dto.NotificationResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Router /api/v1/notifications/from-template [post]
+func (h *NotificationHandler) SendFromTemplate(c *fiber.Ctx) error {
+	var req dto.SendFromTemplateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
+			Error:   "invalid request body",
+			Details: err.Error(),
+		})
+	}
+
+	if req.TemplateID == "" || req.Recipient == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
+			Error: "template_id and recipient are required",
+		})
+	}
+
+	templateID, err := uuid.Parse(req.TemplateID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{Error: "invalid template_id"})
+	}
+
+	tmpl, err := h.templateSvc.GetByID(c.UserContext(), templateID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(dto.ErrorResponse{Error: "template not found"})
+	}
+
+	content, err := h.templateSvc.RenderContent(tmpl, req.Params)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(dto.ErrorResponse{
+			Error:   "failed to render template",
+			Details: err.Error(),
+		})
+	}
+
+	notifReq := &dto.CreateNotificationRequest{
+		Channel:   tmpl.Channel,
+		Recipient: req.Recipient,
+		Content:   content,
+		Priority:  req.Priority,
+	}
+
+	n, err := h.svc.Create(c.UserContext(), notifReq, "")
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error:   "failed to create notification",
+			Details: err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusAccepted).JSON(dto.NotificationResponse{Notification: *n})
 }
