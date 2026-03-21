@@ -4,6 +4,8 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+
+	"notification_service/internal/handler"
 )
 
 func main() {
@@ -15,11 +17,7 @@ func main() {
 		})
 	})
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"status": "ok",
-		})
-	})
+	app.Get("/health", handler.HealthCheck)
 
-	log.Fatal(app.Listen(":8080"))
+	log.Fatal(app.Listen(":8081"))
 }
