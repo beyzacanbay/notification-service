@@ -15,12 +15,12 @@ import (
 )
 
 type mockProducer struct {
-	lastNotification *model.Notification
-	err              error
+	lastID uuid.UUID
+	err    error
 }
 
-func (m *mockProducer) Enqueue(_ context.Context, n *model.Notification) error {
-	m.lastNotification = n
+func (m *mockProducer) Enqueue(_ context.Context, id uuid.UUID) error {
+	m.lastID = id
 	return m.err
 }
 
@@ -81,16 +81,16 @@ func TestCreate_Success(t *testing.T) {
 		t.Fatalf("expected 202, got %d", resp.StatusCode)
 	}
 
-	if mock.lastNotification == nil {
+	if mock.lastID == uuid.Nil {
 		t.Fatal("expected notification to be enqueued")
-	}
-
-	if mock.lastNotification.Channel != model.ChannelSMS {
-		t.Fatalf("expected channel sms, got %s", mock.lastNotification.Channel)
 	}
 
 	if len(repo.notifications) != 1 {
 		t.Fatalf("expected 1 notification in repo, got %d", len(repo.notifications))
+	}
+
+	if repo.notifications[mock.lastID].Channel != model.ChannelSMS {
+		t.Fatalf("expected channel sms, got %s", repo.notifications[mock.lastID].Channel)
 	}
 }
 

@@ -2,13 +2,11 @@ package queue
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-
-	"github.com/beyzacanbay/notification-service/internal/model"
 )
 
 const QueueName = "notifications"
@@ -21,20 +19,15 @@ func NewProducer(client *redis.Client) *Producer {
 	return &Producer{client: client}
 }
 
-func (p *Producer) Enqueue(ctx context.Context, n *model.Notification) error {
-	data, err := json.Marshal(n)
-	if err != nil {
-		return fmt.Errorf("marshal notification %s: %w", n.ID, err)
-	}
-
+func (p *Producer) Enqueue(ctx context.Context, id uuid.UUID) error {
 	score := float64(time.Now().UnixMilli())
 
-	err = p.client.ZAdd(ctx, QueueName, redis.Z{
+	err := p.client.ZAdd(ctx, QueueName, redis.Z{
 		Score:  score,
-		Member: string(data),
+		Member: id.String(),
 	}).Err()
 	if err != nil {
-		return fmt.Errorf("enqueue notification %s: %w", n.ID, err)
+		return fmt.Errorf("enqueue notification %s: %w", id, err)
 	}
 
 	return nil

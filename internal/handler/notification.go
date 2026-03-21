@@ -13,7 +13,7 @@ import (
 )
 
 type Enqueuer interface {
-	Enqueue(ctx context.Context, n *model.Notification) error
+	Enqueue(ctx context.Context, id uuid.UUID) error
 }
 
 type NotificationHandler struct {
@@ -79,7 +79,7 @@ func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := h.producer.Enqueue(c.UserContext(), n); err != nil {
+	if err := h.producer.Enqueue(c.UserContext(), n.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "failed to enqueue notification",
 			Details: err.Error(),
