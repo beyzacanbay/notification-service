@@ -22,6 +22,10 @@ func NewPostgresNotificationRepo(pool *pgxpool.Pool) NotificationRepository {
 	return &postgresNotificationRepo{pool: pool}
 }
 
+const insertSQL = `
+	INSERT INTO notifications (id, batch_id, channel, recipient, content, priority, status, attempt_count, max_attempts, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+
 func (r *postgresNotificationRepo) Create(ctx context.Context, n *model.Notification) error {
 	if n.ID == uuid.Nil {
 		n.ID = uuid.New()
@@ -29,11 +33,8 @@ func (r *postgresNotificationRepo) Create(ctx context.Context, n *model.Notifica
 	n.CreatedAt = time.Now()
 	n.UpdatedAt = time.Now()
 
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO notifications (id, batch_id, channel, recipient, content, priority, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.CreatedAt, n.UpdatedAt)
-
+	_, err := r.pool.Exec(ctx, insertSQL,
+		n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
 	return err
 }
 
@@ -58,10 +59,8 @@ func (r *postgresNotificationRepo) CreateBatch(ctx context.Context, notification
 		n.CreatedAt = now
 		n.UpdatedAt = now
 
-		batch.Queue(`
-			INSERT INTO notifications (id, batch_id, channel, recipient, content, priority, status, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.CreatedAt, n.UpdatedAt)
+		batch.Queue(insertSQL,
+			n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
 	}
 
 	br := tx.SendBatch(ctx, batch)
@@ -76,39 +75,41 @@ func (r *postgresNotificationRepo) CreateBatch(ctx context.Context, notification
 	return tx.Commit(ctx)
 }
 
-func (r *postgresNotificationRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Notification, error) {
+const selectColumns = `id, batch_id, channel, recipient, content, priority, status, attempt_count, max_attempts, last_error, sent_at, created_at, updated_at`
+
+func scanNotification(row pgx.Row) (*model.Notification, error) {
 	n := &model.Notification{}
-
-	err := r.pool.QueryRow(ctx, `
-		SELECT id, batch_id, channel, recipient, content, priority, status, created_at, updated_at
-		FROM notifications WHERE id = $1`, id).Scan(
-		&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.CreatedAt, &n.UpdatedAt)
-
+	err := row.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
-
 	return n, nil
 }
 
-func (r *postgresNotificationRepo) GetByBatchID(ctx context.Context, batchID uuid.UUID) ([]*model.Notification, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, batch_id, channel, recipient, content, priority, status, created_at, updated_at
-		FROM notifications WHERE batch_id = $1 ORDER BY created_at`, batchID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
+func scanNotifications(rows pgx.Rows) ([]*model.Notification, error) {
 	var notifications []*model.Notification
 	for rows.Next() {
 		n := &model.Notification{}
-		if err := rows.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, err
 		}
 		notifications = append(notifications, n)
 	}
 	return notifications, rows.Err()
+}
+
+func (r *postgresNotificationRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Notification, error) {
+	row := r.pool.QueryRow(ctx, fmt.Sprintf("SELECT %s FROM notifications WHERE id = $1", selectColumns), id)
+	return scanNotification(row)
+}
+
+func (r *postgresNotificationRepo) GetByBatchID(ctx context.Context, batchID uuid.UUID) ([]*model.Notification, error) {
+	rows, err := r.pool.Query(ctx, fmt.Sprintf("SELECT %s FROM notifications WHERE batch_id = $1 ORDER BY created_at", selectColumns), batchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanNotifications(rows)
 }
 
 func (r *postgresNotificationRepo) List(ctx context.Context, filter *dto.ListNotificationsRequest) ([]*model.Notification, int64, error) {
@@ -145,17 +146,12 @@ func (r *postgresNotificationRepo) List(ctx context.Context, filter *dto.ListNot
 	}
 
 	var total int64
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM notifications %s", whereClause)
-	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM notifications %s", whereClause), args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	query := fmt.Sprintf(`
-		SELECT id, batch_id, channel, recipient, content, priority, status, created_at, updated_at
-		FROM notifications %s
-		ORDER BY created_at DESC
-		LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1)
-
+	query := fmt.Sprintf("SELECT %s FROM notifications %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
+		selectColumns, whereClause, argIdx, argIdx+1)
 	args = append(args, filter.PerPage, filter.Offset())
 
 	rows, err := r.pool.Query(ctx, query, args...)
@@ -164,22 +160,25 @@ func (r *postgresNotificationRepo) List(ctx context.Context, filter *dto.ListNot
 	}
 	defer rows.Close()
 
-	var notifications []*model.Notification
-	for rows.Next() {
-		n := &model.Notification{}
-		if err := rows.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.CreatedAt, &n.UpdatedAt); err != nil {
-			return nil, 0, err
-		}
-		notifications = append(notifications, n)
+	notifications, err := scanNotifications(rows)
+	if err != nil {
+		return nil, 0, err
 	}
-
-	return notifications, total, rows.Err()
+	return notifications, total, nil
 }
 
-func (r *postgresNotificationRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.Status) error {
-	_, err := r.pool.Exec(ctx,
-		"UPDATE notifications SET status = $1 WHERE id = $2",
-		status, id)
+func (r *postgresNotificationRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status model.Status, lastError *string) error {
+	_, err := r.pool.Exec(ctx, "UPDATE notifications SET status = $1, last_error = $2 WHERE id = $3", status, lastError, id)
+	return err
+}
+
+func (r *postgresNotificationRepo) IncrementAttempt(ctx context.Context, id uuid.UUID, lastError string) error {
+	_, err := r.pool.Exec(ctx, "UPDATE notifications SET attempt_count = attempt_count + 1, last_error = $1 WHERE id = $2", lastError, id)
+	return err
+}
+
+func (r *postgresNotificationRepo) MarkSent(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, "UPDATE notifications SET status = 'sent', sent_at = NOW() WHERE id = $1", id)
 	return err
 }
 
@@ -190,13 +189,11 @@ func (r *postgresNotificationRepo) GetMetrics(ctx context.Context) (*dto.Metrics
 	if err != nil {
 		return nil, err
 	}
-
 	err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM notifications WHERE status = 'failed'").Scan(&metrics.TotalFailed)
 	if err != nil {
 		return nil, err
 	}
-
-	err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM notifications WHERE status IN ('pending', 'queued')").Scan(&metrics.TotalPending)
+	err = r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM notifications WHERE status IN ('pending', 'queued', 'processing')").Scan(&metrics.TotalPending)
 	if err != nil {
 		return nil, err
 	}

@@ -4,12 +4,19 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Redis    RedisConfig
+	Worker   WorkerConfig
+	Webhook  WebhookConfig
+}
+
+type ServerConfig struct {
+	Port int
 }
 
 type DatabaseConfig struct {
@@ -26,10 +33,6 @@ func (d DatabaseConfig) DSN() string {
 		d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)
 }
 
-type ServerConfig struct {
-	Port int
-}
-
 type RedisConfig struct {
 	Host     string
 	Port     int
@@ -39,6 +42,19 @@ type RedisConfig struct {
 
 func (r RedisConfig) Addr() string {
 	return fmt.Sprintf("%s:%d", r.Host, r.Port)
+}
+
+type WorkerConfig struct {
+	Concurrency    int
+	RateLimit      int
+	MaxRetries     int
+	RetryBaseDelay time.Duration
+	RetryMaxDelay  time.Duration
+}
+
+type WebhookConfig struct {
+	URL     string
+	Timeout time.Duration
 }
 
 func Load() *Config {
@@ -60,6 +76,17 @@ func Load() *Config {
 			Password: getEnv("REDIS_PASSWORD", ""),
 			DB:       getEnvInt("REDIS_DB", 0),
 		},
+		Worker: WorkerConfig{
+			Concurrency:    getEnvInt("WORKER_CONCURRENCY", 5),
+			RateLimit:      getEnvInt("WORKER_RATE_LIMIT", 100),
+			MaxRetries:     getEnvInt("WORKER_MAX_RETRIES", 3),
+			RetryBaseDelay: getEnvDuration("WORKER_RETRY_BASE_DELAY", 1*time.Second),
+			RetryMaxDelay:  getEnvDuration("WORKER_RETRY_MAX_DELAY", 5*time.Minute),
+		},
+		Webhook: WebhookConfig{
+			URL:     getEnv("WEBHOOK_URL", "https://webhook.site/test"),
+			Timeout: getEnvDuration("WEBHOOK_TIMEOUT", 10*time.Second),
+		},
 	}
 }
 
@@ -74,6 +101,15 @@ func getEnvInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
 			return i
+		}
+	}
+	return fallback
+}
+
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
 		}
 	}
 	return fallback

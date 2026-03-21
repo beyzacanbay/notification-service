@@ -18,3 +18,10 @@ curl -X POST http://localhost:8081/api/v1/notifications/batch \
 
 
   curl "http://localhost:8081/api/v1/notifications?status=pending&channel=sms&page=1&per_page=10"
+
+
+  idempotency key ? 
+  - header'da gelebilir ?
+  - bodyden alalim ama body bozmak cok mantikli degil
+  - hash(channel+message+title) olarak set edebiliriz
+  - middleware olarak ekleyebiliriz 

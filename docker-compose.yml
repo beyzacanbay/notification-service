@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    command: ["./api"]
     ports:
       - "8081:8081"
     environment:
@@ -15,6 +16,32 @@ services:
       - DB_SSL_MODE=disable
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["./worker"]
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=notifications
+      - DB_SSL_MODE=disable
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - WORKER_CONCURRENCY=5
+      - WORKER_RATE_LIMIT=100
+      - WEBHOOK_URL=${WEBHOOK_URL:-https://webhook.site/f0eac640-19c0-49f6-a32d-be5f8bcffb1e}
     depends_on:
       db:
         condition: service_healthy
@@ -54,11 +81,14 @@ services:
     image: migrate/migrate:v4.17.0
     volumes:
       - ./migrations:/migrations
-    command: [
-      "-path", "/migrations",
-      "-database", "postgres://postgres:postgres@db:5432/notifications?sslmode=disable",
-      "up"
-    ]
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "postgres://postgres:postgres@db:5432/notifications?sslmode=disable",
+        "up",
+      ]
     depends_on:
       db:
         condition: service_healthy

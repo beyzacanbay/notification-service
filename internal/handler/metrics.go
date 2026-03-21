@@ -26,9 +26,9 @@ func (h *MetricsHandler) Metrics(c *fiber.Ctx) error {
 		})
 	}
 
-	depth, err := h.producer.GetQueueDepth(c.UserContext())
+	depths, err := h.producer.GetQueueDepth(c.UserContext())
 	if err == nil {
-		metrics.QueueDepth = depth
+		metrics.QueueDepth = depths
 	}
 
 	return c.JSON(metrics)

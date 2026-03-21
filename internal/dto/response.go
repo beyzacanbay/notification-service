@@ -21,12 +21,12 @@ type PaginatedResponse struct {
 }
 
 type MetricsResponse struct {
-	QueueDepth  int64   `json:"queue_depth"`
-	TotalSent   int64   `json:"total_sent"`
-	TotalFailed int64   `json:"total_failed"`
-	TotalPending int64  `json:"total_pending"`
-	SuccessRate float64 `json:"success_rate"`
-	FailureRate float64 `json:"failure_rate"`
+	QueueDepth   map[string]int64 `json:"queue_depth,omitempty"`
+	TotalSent    int64            `json:"total_sent"`
+	TotalFailed  int64            `json:"total_failed"`
+	TotalPending int64            `json:"total_pending"`
+	SuccessRate  float64          `json:"success_rate"`
+	FailureRate  float64          `json:"failure_rate"`
 }
 
 type ErrorResponse struct {

@@ -15,7 +15,7 @@ import (
 )
 
 type Enqueuer interface {
-	Enqueue(ctx context.Context, id uuid.UUID) error
+	Enqueue(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel) error
 }
 
 type NotificationHandler struct {
@@ -69,14 +69,15 @@ func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 	}
 
 	n := &model.Notification{
-		ID:        uuid.New(),
-		Channel:   req.Channel,
-		Recipient: req.Recipient,
-		Content:   req.Content,
-		Priority:  priority,
-		Status:    model.StatusPending,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:          uuid.New(),
+		Channel:     req.Channel,
+		Recipient:   req.Recipient,
+		Content:     req.Content,
+		Priority:    priority,
+		Status:      model.StatusPending,
+		MaxAttempts: 3,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 
 	if err := h.repo.Create(c.UserContext(), n); err != nil {
@@ -86,7 +87,7 @@ func (h *NotificationHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := h.producer.Enqueue(c.UserContext(), n.ID); err != nil {
+	if err := h.producer.Enqueue(c.UserContext(), n.ID, n.Priority, n.Channel); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "failed to enqueue notification",
 			Details: err.Error(),
@@ -134,15 +135,16 @@ func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 		}
 
 		notifications = append(notifications, &model.Notification{
-			ID:        uuid.New(),
-			BatchID:   &batchID,
-			Channel:   r.Channel,
-			Recipient: r.Recipient,
-			Content:   r.Content,
-			Priority:  priority,
-			Status:    model.StatusPending,
-			CreatedAt: now,
-			UpdatedAt: now,
+			ID:          uuid.New(),
+			BatchID:     &batchID,
+			Channel:     r.Channel,
+			Recipient:   r.Recipient,
+			Content:     r.Content,
+			Priority:    priority,
+			Status:      model.StatusPending,
+			MaxAttempts: 3,
+			CreatedAt:   now,
+			UpdatedAt:   now,
 		})
 	}
 
@@ -160,7 +162,7 @@ func (h *NotificationHandler) CreateBatch(c *fiber.Ctx) error {
 	}
 
 	for _, n := range notifications {
-		h.producer.Enqueue(c.UserContext(), n.ID)
+		h.producer.Enqueue(c.UserContext(), n.ID, n.Priority, n.Channel)
 	}
 
 	resp := dto.BatchCreateResponse{
@@ -222,7 +224,7 @@ func (h *NotificationHandler) Cancel(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := h.repo.UpdateStatus(c.UserContext(), id, model.StatusCancelled); err != nil {
+	if err := h.repo.UpdateStatus(c.UserContext(), id, model.StatusCancelled, nil); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "failed to cancel notification",
 			Details: err.Error(),

@@ -18,6 +18,8 @@ type NotificationRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Notification, error)
 	GetByBatchID(ctx context.Context, batchID uuid.UUID) ([]*model.Notification, error)
 	List(ctx context.Context, filter *dto.ListNotificationsRequest) ([]*model.Notification, int64, error)
-	UpdateStatus(ctx context.Context, id uuid.UUID, status model.Status) error
+	UpdateStatus(ctx context.Context, id uuid.UUID, status model.Status, lastError *string) error
+	IncrementAttempt(ctx context.Context, id uuid.UUID, lastError string) error
+	MarkSent(ctx context.Context, id uuid.UUID) error
 	GetMetrics(ctx context.Context) (*dto.MetricsResponse, error)
 }
