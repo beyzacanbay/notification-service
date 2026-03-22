@@ -1,5 +1,15 @@
 # Notification Service
 
+[![CI](https://github.com/beyzacanbay/notification-service/actions/workflows/ci.yml/badge.svg)](https://github.com/beyzacanbay/notification-service/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/beyzacanbay/notification-service/graph/badge.svg)](https://codecov.io/gh/beyzacanbay/notification-service)
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Fiber](https://img.shields.io/badge/Fiber-v2-00ACD7?logo=go&logoColor=white)](https://gofiber.io)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Swagger](https://img.shields.io/badge/Swagger-UI-85EA2D?logo=swagger&logoColor=black)](https://notification-service-production-fa83.up.railway.app/swagger/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Event-driven notification system that processes and delivers messages through multiple channels (SMS, Email, Push) with reliable delivery, retry logic, and real-time status tracking.
 
 ## 🚀 Live demo
