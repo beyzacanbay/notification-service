@@ -48,7 +48,7 @@ scale-workers:
 
 # Swagger
 swagger:
-	docker run --rm -v $(pwd):/code ghcr.io/swaggo/swag:latest init -g cmd/api/main.go -o docs/swagger
+	docker run --rm -v $(pwd):/code ghcr.io/swaggo/swag:v1.16.4 init -g cmd/api/main.go -o docs/swagger
 
 # Clean build artifacts
 clean:

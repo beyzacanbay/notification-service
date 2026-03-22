@@ -40,6 +40,8 @@ definitions:
         $ref: '#/definitions/model.Priority'
       recipient:
         type: string
+      scheduled_at:
+        type: string
     type: object
   dto.CreateTemplateRequest:
     properties:
@@ -105,6 +107,8 @@ definitions:
       priority:
         $ref: '#/definitions/model.Priority'
       recipient:
+        type: string
+      scheduled_at:
         type: string
       sent_at:
         type: string

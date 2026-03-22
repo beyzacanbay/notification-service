@@ -609,6 +609,9 @@
                 },
                 "recipient": {
                     "type": "string"
+                },
+                "scheduled_at": {
+                    "type": "string"
                 }
             }
         },
@@ -709,6 +712,9 @@
                     "$ref": "#/definitions/model.Priority"
                 },
                 "recipient": {
+                    "type": "string"
+                },
+                "scheduled_at": {
                     "type": "string"
                 },
                 "sent_at": {
