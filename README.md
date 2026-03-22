@@ -17,9 +17,9 @@ Event-driven notification system that processes and delivers messages through mu
 A **deployed API** is available for a quick smoke test. The worker delivers notifications to [webhook.site](https://webhook.site) so you can inspect raw HTTP requests (body, headers, timing) without configuring a real SMS/email provider.
 
 **1. Send a notification**
-
 Replace the JSON fields as needed (`channel`: `sms` | `email` | `push`).
 
+```bash
 curl -sS -X POST "https://notification-service-production-fa83.up.railway.app/api/v1/notifications" \
   -H "Content-Type: application/json" \
   -d '{
@@ -27,9 +27,17 @@ curl -sS -X POST "https://notification-service-production-fa83.up.railway.app/ap
     "recipient": "example-device-token",
     "content": "Hello from the notification service demo"
   }'
+```
 
-**2. Trace delivery:** open the [webhook.site](https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e/7bc5e328-9b67-408b-9512-564038109c60/1) to see the worker’s `POST` calls as they arrive.
+**2. Trace delivery:** open the [https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e/7bc5e328-9b67-408b-9512-564038109c60/1](https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e/7bc5e328-9b67-408b-9512-564038109c60/1) to see the worker’s `POST` calls as they arrive.
 
+## Quick Start - Local
+
+```bash
+docker compose up --build
+```
+
+This starts: API (`:8081`), Worker, PostgreSQL, Redis, Jaeger (`:16686`), and runs migrations automatically.
 
 ## Architecture
 
@@ -64,14 +72,6 @@ curl -sS -X POST "https://notification-service-production-fa83.up.railway.app/ap
 **API** receives notification requests, validates them, persists to PostgreSQL, and enqueues to Redis sorted sets. **Worker** consumes from priority queues, applies rate limiting, delivers via channel-specific providers (webhook), and handles retries with exponential backoff + jitter.
 
 Both processes are independently deployable and horizontally scalable.
-
-## Quick Start
-
-```bash
-docker compose up --build
-```
-
-This starts: API (`:8081`), Worker, PostgreSQL, Redis, Jaeger (`:16686`), and runs migrations automatically.
 
 ## API Endpoints
 
@@ -197,6 +197,7 @@ websocat ws://localhost:8081/ws/notifications
 - **Exponential backoff with jitter**: `delay = baseDelay * 2^attempt + random(0, baseDelay)`. Prevents thundering herd on retries.
 - **Error classification**: `RetryableError` (5xx, timeout, 429) → retry with backoff. `PermanentError` (4xx) → fail immediately, send to DLQ.
 - **Dead Letter Queue**: Redis hash. Failed notifications after max retries (default 3) are preserved for inspection.
+- **Circuit Breaker**: Currently not implemented a CB but it would be very helpful to protect unresponsive provider. 
 
 ### Idempotency
 
@@ -226,7 +227,7 @@ Channel-specific rules:
 
 ### Template System
 
-Go `text/template` syntax with variable substitution. Templates stored in PostgreSQL, rendered at send time. Channel is defined on the template — ensures SMS templates only go via SMS.
+Templates are stored in PostgreSQL with Go `text/template` syntax — variables like `{{.Name}}` and `{{.Code}}` are replaced with actual values at send time via the `params` field in the request. Channel is defined on the template, ensuring SMS templates only go via SMS.
 
 ## Project Structure
 
