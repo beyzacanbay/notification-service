@@ -73,7 +73,7 @@ func (p *baseProvider) doPost(ctx context.Context, payload interface{}) (*SendRe
 	if err != nil {
 		return nil, &RetryableError{Err: fmt.Errorf("send request: %w", err)}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(resp.Body)
 

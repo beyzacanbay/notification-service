@@ -36,7 +36,7 @@ func NewHub(redisClient *redis.Client, logger *slog.Logger) *Hub {
 // Subscribe listens to Redis Pub/Sub and broadcasts to all connected clients.
 func (h *Hub) Subscribe(ctx context.Context) {
 	sub := h.redis.Subscribe(ctx, pubsubChannel)
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 
 	ch := sub.Channel()
 	h.logger.Info("websocket hub subscribed to Redis Pub/Sub", "channel", pubsubChannel)
@@ -75,7 +75,7 @@ func (h *Hub) broadcast(msg []byte) {
 	for conn := range h.clients {
 		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 			h.logger.Error("websocket write error", "error", err)
-			conn.Close()
+			_ = conn.Close()
 			delete(h.clients, conn)
 		}
 	}

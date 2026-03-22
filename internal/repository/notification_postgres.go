@@ -66,11 +66,11 @@ func (r *postgresNotificationRepo) CreateBatch(ctx context.Context, notification
 	br := tx.SendBatch(ctx, batch)
 	for range notifications {
 		if _, err := br.Exec(); err != nil {
-			br.Close()
+			_ = br.Close()
 			return fmt.Errorf("batch insert: %w", err)
 		}
 	}
-	br.Close()
+	_ = br.Close()
 
 	return tx.Commit(ctx)
 }

@@ -75,8 +75,8 @@ func Init(ctx context.Context, serviceName string) *Deps {
 
 func (d *Deps) Close() {
 	if d.TracerShutdown != nil {
-		d.TracerShutdown(context.Background())
+		_ = d.TracerShutdown(context.Background())
 	}
 	d.DB.Close()
-	d.Redis.Close()
+	_ = d.Redis.Close()
 }
