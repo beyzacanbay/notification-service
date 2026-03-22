@@ -2,6 +2,25 @@
 
 Event-driven notification system that processes and delivers messages through multiple channels (SMS, Email, Push) with reliable delivery, retry logic, and real-time status tracking.
 
+## 🚀 Live demo
+
+A **deployed API** is available for a quick smoke test. The worker delivers notifications to [webhook.site](https://webhook.site) so you can inspect raw HTTP requests (body, headers, timing) without configuring a real SMS/email provider.
+
+**1. Send a notification**
+
+Replace the JSON fields as needed (`channel`: `sms` | `email` | `push`).
+
+curl -sS -X POST "https://notification-service-production-fa83.up.railway.app/api/v1/notifications" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel": "push",
+    "recipient": "example-device-token",
+    "content": "Hello from the notification service demo"
+  }'
+
+**2. Trace delivery:** open the [webhook.site](https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e/7bc5e328-9b67-408b-9512-564038109c60/1) to see the worker’s `POST` calls as they arrive.
+
+
 ## Architecture
 
 ```
