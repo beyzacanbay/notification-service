@@ -27,7 +27,7 @@ curl -sS -X POST "https://notification-service-production-fa83.up.railway.app/ap
     "channel": "push",
     "recipient": "example-device-token",
     "content": "Hello from the notification service demo"
-  }’
+  }'
 ```
 
 **2. See it arrive** at [webhook.site](https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e) — the worker’s HTTP POST shows up within seconds.
