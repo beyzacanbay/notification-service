@@ -6,12 +6,16 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/beyzacanbay/notification-service/internal/delivery"
 	"github.com/beyzacanbay/notification-service/internal/model"
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/ratelimiter"
 	"github.com/beyzacanbay/notification-service/internal/repository"
+	"github.com/beyzacanbay/notification-service/internal/tracing"
 	ws "github.com/beyzacanbay/notification-service/internal/websocket"
 )
 
@@ -23,6 +27,7 @@ type Processor struct {
 	dlq         *queue.DLQ
 	retryCfg    delivery.RetryConfig
 	hub         *ws.Hub
+	redis       *redis.Client
 	logger      *slog.Logger
 }
 
@@ -34,6 +39,7 @@ func NewProcessor(
 	dlq *queue.DLQ,
 	retryCfg delivery.RetryConfig,
 	hub *ws.Hub,
+	redisClient *redis.Client,
 	logger *slog.Logger,
 ) *Processor {
 	return &Processor{
@@ -44,25 +50,45 @@ func NewProcessor(
 		dlq:         dlq,
 		retryCfg:    retryCfg,
 		hub:         hub,
+		redis:       redisClient,
 		logger:      logger,
 	}
 }
 
 func (p *Processor) Process(ctx context.Context, notificationID string) error {
+	// Continue the trace started by the API
+	ctx = tracing.ExtractTraceContext(ctx, p.redis, notificationID)
+
+	tracer := otel.Tracer("worker")
+	ctx, span := tracer.Start(ctx, "ProcessNotification")
+	defer span.End()
+	span.SetAttributes(attribute.String("notification_id", notificationID))
+
 	id, err := uuid.Parse(notificationID)
 	if err != nil {
+		span.RecordError(err)
 		return fmt.Errorf("parse notification ID: %w", err)
 	}
 
 	log := p.logger.With("notification_id", id.String())
 
+	_, dbSpan := tracer.Start(ctx, "DB.GetByID")
 	n, err := p.repo.GetByID(ctx, id)
+	dbSpan.End()
 	if err != nil {
+		span.RecordError(err)
 		return fmt.Errorf("get notification: %w", err)
 	}
 
+	span.SetAttributes(
+		attribute.String("channel", string(n.Channel)),
+		attribute.String("recipient", n.Recipient),
+		attribute.Int("attempt", n.AttemptCount),
+	)
+
 	// Skip terminal states
 	if n.Status == model.StatusSent || n.Status == model.StatusCancelled || n.Status == model.StatusFailed {
+		span.SetAttributes(attribute.String("skipped", string(n.Status)))
 		log.Info("skipping notification in terminal state", "status", n.Status)
 		return nil
 	}
@@ -70,16 +96,20 @@ func (p *Processor) Process(ctx context.Context, notificationID string) error {
 	// Resolve provider for channel
 	provider, err := p.providers.Get(n.Channel)
 	if err != nil {
+		span.RecordError(err)
 		return fmt.Errorf("resolve provider: %w", err)
 	}
 
 	// Rate limit check
+	_, rlSpan := tracer.Start(ctx, "RateLimit.Check")
 	allowed, err := p.rateLimiter.Allow(ctx, string(n.Channel))
+	rlSpan.End()
 	if err != nil {
 		log.Error("rate limiter error", "error", err)
 		return p.requeue(ctx, n, "rate limiter error")
 	}
 	if !allowed {
+		span.SetAttributes(attribute.Bool("rate_limited", true))
 		log.Debug("rate limited, re-enqueueing")
 		return p.requeue(ctx, n, "rate limited")
 	}
@@ -90,17 +120,27 @@ func (p *Processor) Process(ctx context.Context, notificationID string) error {
 	}
 
 	// Attempt delivery
+	_, deliverySpan := tracer.Start(ctx, "Delivery.Send")
 	result, err := provider.Send(ctx, n)
+	deliverySpan.End()
 	if err != nil {
+		span.RecordError(err)
+		deliverySpan.RecordError(err)
 		log.Warn("delivery failed", "error", err, "channel", n.Channel, "attempt", n.AttemptCount+1)
 		return p.handleFailure(ctx, n, err)
 	}
 
 	// Success
+	span.SetAttributes(attribute.String("status", "sent"))
 	log.Info("notification delivered", "message_id", result.MessageID, "channel", n.Channel)
-	if err := p.repo.MarkSent(ctx, id); err != nil {
+
+	_, sentSpan := tracer.Start(ctx, "DB.MarkSent")
+	err = p.repo.MarkSent(ctx, id)
+	sentSpan.End()
+	if err != nil {
 		return fmt.Errorf("mark sent: %w", err)
 	}
+
 	p.hub.BroadcastStatus(id.String(), string(model.StatusSent))
 	return nil
 }

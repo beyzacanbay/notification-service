@@ -24,6 +24,7 @@ func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository
 
 	// Middleware
 	app.Use(middleware.Recovery(logger))
+	app.Use(middleware.Tracing("notification-api"))
 	app.Use(middleware.CorrelationID())
 	app.Use(middleware.RequestLogger(logger))
 
