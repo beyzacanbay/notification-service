@@ -21,8 +21,5 @@ func (e *PermanentError) Unwrap() error { return e.Err }
 // IsRetryable returns true if the error is retryable.
 func IsRetryable(err error) bool {
 	var permanent *PermanentError
-	if errors.As(err, &permanent) {
-		return false
-	}
-	return true
+	return !errors.As(err, &permanent)
 }

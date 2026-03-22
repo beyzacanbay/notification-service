@@ -108,7 +108,7 @@ func (s *NotificationService) CreateBatch(ctx context.Context, req *dto.BatchCre
 	}
 
 	for _, n := range notifications {
-		s.producer.Enqueue(ctx, n.ID, n.Priority, n.Channel)
+		_ = s.producer.Enqueue(ctx, n.ID, n.Priority, n.Channel)
 	}
 
 	resp := &dto.BatchCreateResponse{

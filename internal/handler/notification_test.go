@@ -269,7 +269,7 @@ func TestGetStatus_Success(t *testing.T) {
 	}
 
 	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "sent" {
 		t.Fatalf("expected status sent, got %v", result["status"])
 	}
@@ -333,7 +333,7 @@ func TestList_Success(t *testing.T) {
 	}
 
 	var result dto.PaginatedResponse
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result)
 	if result.TotalItems != 2 {
 		t.Fatalf("expected 2 total items, got %d", result.TotalItems)
 	}
@@ -350,7 +350,7 @@ func TestList_Empty(t *testing.T) {
 	}
 
 	var result dto.PaginatedResponse
-	json.NewDecoder(resp.Body).Decode(&result)
+	_ = json.NewDecoder(resp.Body).Decode(&result)
 	if result.TotalItems != 0 {
 		t.Fatalf("expected 0 total items, got %d", result.TotalItems)
 	}

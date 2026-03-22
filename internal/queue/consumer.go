@@ -30,11 +30,13 @@ func (c *Consumer) Dequeue(ctx context.Context) (string, error) {
 
 	for _, q := range c.queues {
 		// Get the first item with score <= now
-		results, err := c.client.ZRangeByScore(ctx, q, &redis.ZRangeBy{
-			Min:    "-inf",
-			Max:    now,
-			Offset: 0,
-			Count:  1,
+		results, err := c.client.ZRangeArgs(ctx, redis.ZRangeArgs{
+			Key:     q,
+			Start:   "-inf",
+			Stop:    now,
+			ByScore: true,
+			Offset:  0,
+			Count:   1,
 		}).Result()
 		if err != nil {
 			return "", fmt.Errorf("dequeue from %s: %w", q, err)

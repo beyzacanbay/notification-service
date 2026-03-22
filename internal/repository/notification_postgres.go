@@ -52,7 +52,7 @@ func (r *postgresNotificationRepo) CreateBatch(ctx context.Context, notification
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	batch := &pgx.Batch{}
 	now := time.Now()
