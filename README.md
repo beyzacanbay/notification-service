@@ -12,24 +12,29 @@
 
 Event-driven notification system that processes and delivers messages through multiple channels (SMS, Email, Push) with reliable delivery, retry logic, and real-time status tracking.
 
-## 🚀 Live demo
+## 🚀 Live Demo
 
-A **deployed API** is available for a quick smoke test. The worker delivers notifications to [webhook.site](https://webhook.site) so you can inspect raw HTTP requests (body, headers, timing) without configuring a real SMS/email provider.
+> **The system is deployed and running right now.** API, Worker, PostgreSQL, and Redis are all live on Railway. You can hit the endpoints below — notifications will be created, queued, processed by the worker, and delivered to webhook.site in real-time.
 
-**1. Send a notification**
-Replace the JSON fields as needed (`channel`: `sms` | `email` | `push`).
+**Base URL:** `https://notification-service-production-fa83.up.railway.app`
+
+**1. Try the API** — send a notification and watch it get delivered:
 
 ```bash
 curl -sS -X POST "https://notification-service-production-fa83.up.railway.app/api/v1/notifications" \
   -H "Content-Type: application/json" \
-  -d '{
+  -d ‘{
     "channel": "push",
     "recipient": "example-device-token",
     "content": "Hello from the notification service demo"
-  }'
+  }’
 ```
 
-**2. Trace delivery:** open the [https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e/7bc5e328-9b67-408b-9512-564038109c60/1](https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e/7bc5e328-9b67-408b-9512-564038109c60/1) to see the worker’s `POST` calls as they arrive.
+**2. See it arrive** at [webhook.site](https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e) — the worker’s HTTP POST shows up within seconds.
+
+**3. Browse the API docs** — full Swagger UI is live at [`/swagger`](https://notification-service-production-fa83.up.railway.app/swagger/)
+
+![Swagger UI](assets/swagger.png)
 
 ## Quick Start - Local
 
