@@ -6,7 +6,7 @@
         "contact": {},
         "version": "1.0"
     },
-    "host": "localhost:8081",
+    "host": "notification-service-production-fa83.up.railway.app",
     "basePath": "/",
     "paths": {
         "/api/v1/notifications": {

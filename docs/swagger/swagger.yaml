@@ -192,7 +192,7 @@ definitions:
       updated_at:
         type: string
     type: object
-host: localhost:8081
+host: notification-service-production-fa83.up.railway.app
 info:
   contact: {}
   description: Event-driven notification system for processing and delivering messages
