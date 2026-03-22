@@ -330,6 +330,30 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+func TestList_WithFilters(t *testing.T) {
+	repo := newMockRepo()
+	repo.seedNotification(model.StatusPending)
+	repo.seedNotification(model.StatusSent)
+	app := setupApp(repo, &mockProducer{})
+
+	req := httptest.NewRequest("GET", "/api/v1/notifications?status=sent&channel=sms&page=1&per_page=5", nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result dto.PaginatedResponse
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.Page != 1 {
+		t.Fatalf("expected page 1, got %d", result.Page)
+	}
+	if result.PerPage != 5 {
+		t.Fatalf("expected per_page 5, got %d", result.PerPage)
+	}
+}
+
 func TestList_Empty(t *testing.T) {
 	app := setupApp(newMockRepo(), &mockProducer{})
 

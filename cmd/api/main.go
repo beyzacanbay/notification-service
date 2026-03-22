@@ -4,13 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"log/slog"
-	"os"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
-
-	"github.com/beyzacanbay/notification-service/internal/config"
+	"github.com/beyzacanbay/notification-service/internal/bootstrap"
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/repository"
 	"github.com/beyzacanbay/notification-service/internal/server"
@@ -22,50 +17,17 @@ import (
 // @host localhost:8081
 // @BasePath /
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
-
-	cfg := config.Load()
 	ctx := context.Background()
+	deps := bootstrap.Init(ctx)
+	defer deps.Close()
 
-	// PostgreSQL
-	dbPool, err := pgxpool.New(ctx, cfg.Database.DSN())
-	if err != nil {
-		logger.Error("failed to connect to database", "error", err)
-		os.Exit(1)
-	}
-	defer dbPool.Close()
+	notificationRepo := repository.NewPostgresNotificationRepo(deps.DB)
+	templateRepo := repository.NewPostgresTemplateRepo(deps.DB)
+	producer := queue.NewProducer(deps.Redis)
 
-	if err := dbPool.Ping(ctx); err != nil {
-		logger.Error("failed to ping database", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("connected to PostgreSQL")
+	app := server.NewServer(deps.DB, deps.Redis, notificationRepo, templateRepo, producer, deps.Logger)
 
-	// Redis
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.Redis.Addr(),
-		Password: cfg.Redis.Password,
-		DB:       cfg.Redis.DB,
-	})
-	defer redisClient.Close()
-
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		logger.Error("failed to connect to Redis", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("connected to Redis")
-
-	// Dependencies
-	notificationRepo := repository.NewPostgresNotificationRepo(dbPool)
-	templateRepo := repository.NewPostgresTemplateRepo(dbPool)
-	producer := queue.NewProducer(redisClient)
-
-	app := server.NewServer(dbPool, redisClient, notificationRepo, templateRepo, producer, logger)
-
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	logger.Info("API server starting", "port", cfg.Server.Port)
+	addr := fmt.Sprintf(":%d", deps.Config.Server.Port)
+	deps.Logger.Info("API server starting", "port", deps.Config.Server.Port)
 	log.Fatal(app.Listen(addr))
 }

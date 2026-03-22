@@ -225,6 +225,26 @@ func (h *NotificationHandler) GetBatchStatus(c *fiber.Ctx) error {
 // @Success 200 {object} dto.PaginatedResponse
 // @Router /api/v1/notifications [get]
 func (h *NotificationHandler) List(c *fiber.Ctx) error {
+	filter := parseListFilter(c)
+
+	data, total, totalPages, err := h.svc.List(c.UserContext(), filter)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
+			Error:   "failed to list notifications",
+			Details: err.Error(),
+		})
+	}
+
+	return c.JSON(dto.PaginatedResponse{
+		Data:       data,
+		Page:       filter.Page,
+		PerPage:    filter.PerPage,
+		TotalItems: total,
+		TotalPages: totalPages,
+	})
+}
+
+func parseListFilter(c *fiber.Ctx) *dto.ListNotificationsRequest {
 	filter := &dto.ListNotificationsRequest{}
 
 	if s := c.Query("status"); s != "" {
@@ -252,21 +272,7 @@ func (h *NotificationHandler) List(c *fiber.Ctx) error {
 		filter.PerPage, _ = strconv.Atoi(pp)
 	}
 
-	data, total, totalPages, err := h.svc.List(c.UserContext(), filter)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
-			Error:   "failed to list notifications",
-			Details: err.Error(),
-		})
-	}
-
-	return c.JSON(dto.PaginatedResponse{
-		Data:       data,
-		Page:       filter.Page,
-		PerPage:    filter.PerPage,
-		TotalItems: total,
-		TotalPages: totalPages,
-	})
+	return filter
 }
 
 // SendFromTemplate godoc
