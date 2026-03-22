@@ -212,9 +212,19 @@ Both stored in Redis with 24h TTL. No database pollution.
 - **Structured logging**: JSON format, every log includes correlation ID
 - **Correlation IDs**: Auto-generated per request, propagated through context, included in response headers
 - **Distributed tracing**: OpenTelemetry → Jaeger. API and Worker spans linked via Redis trace context propagation — single trace shows full notification lifecycle
-- **Prometheus metrics**: `/metrics` endpoint exposes HTTP request metrics (count, latency histogram, status codes) and business metrics (notifications created/delivered/failed/retried per channel, delivery duration histogram, rate limit hits)
+- **Prometheus metrics**: `/metrics` endpoint exposes business metrics (notifications created/delivered/failed/retried per channel, delivery duration histogram, rate limit hits)
+- **Grafana dashboard**: Pre-configured dashboard with delivery rates, latency percentiles, retry/rate-limit counters, and totals
 - **Health checks**: `/health` (liveness), `/ready` (dependency health — pings PostgreSQL and Redis)
 - **WebSocket**: Real-time push updates when notification status changes (sent/failed)
+
+#### Grafana Dashboard
+![Grafana Dashboard](assets/grafana.png)
+
+#### Jaeger Distributed Tracing
+![Jaeger Tracing](assets/jaeger.png)
+
+#### WebSocket Real-time Updates
+![WebSocket Updates](assets/websockets.png)
 
 ### Content Validation
 
