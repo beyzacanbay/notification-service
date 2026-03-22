@@ -23,8 +23,8 @@ func NewPostgresNotificationRepo(pool *pgxpool.Pool) NotificationRepository {
 }
 
 const insertSQL = `
-	INSERT INTO notifications (id, batch_id, channel, recipient, content, priority, status, attempt_count, max_attempts, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	INSERT INTO notifications (id, batch_id, channel, recipient, content, priority, status, scheduled_at, attempt_count, max_attempts, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
 
 func (r *postgresNotificationRepo) Create(ctx context.Context, n *model.Notification) error {
 	if n.ID == uuid.Nil {
@@ -34,7 +34,7 @@ func (r *postgresNotificationRepo) Create(ctx context.Context, n *model.Notifica
 	n.UpdatedAt = time.Now()
 
 	_, err := r.pool.Exec(ctx, insertSQL,
-		n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
+		n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.ScheduledAt, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
 	return err
 }
 
@@ -60,7 +60,7 @@ func (r *postgresNotificationRepo) CreateBatch(ctx context.Context, notification
 		n.UpdatedAt = now
 
 		batch.Queue(insertSQL,
-			n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
+			n.ID, n.BatchID, n.Channel, n.Recipient, n.Content, n.Priority, n.Status, n.ScheduledAt, n.AttemptCount, n.MaxAttempts, n.CreatedAt, n.UpdatedAt)
 	}
 
 	br := tx.SendBatch(ctx, batch)
@@ -75,11 +75,11 @@ func (r *postgresNotificationRepo) CreateBatch(ctx context.Context, notification
 	return tx.Commit(ctx)
 }
 
-const selectColumns = `id, batch_id, channel, recipient, content, priority, status, attempt_count, max_attempts, last_error, sent_at, created_at, updated_at`
+const selectColumns = `id, batch_id, channel, recipient, content, priority, status, scheduled_at, attempt_count, max_attempts, last_error, sent_at, created_at, updated_at`
 
 func scanNotification(row pgx.Row) (*model.Notification, error) {
 	n := &model.Notification{}
-	err := row.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt)
+	err := row.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.ScheduledAt, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func scanNotifications(rows pgx.Rows) ([]*model.Notification, error) {
 	var notifications []*model.Notification
 	for rows.Next() {
 		n := &model.Notification{}
-		if err := rows.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.BatchID, &n.Channel, &n.Recipient, &n.Content, &n.Priority, &n.Status, &n.ScheduledAt, &n.AttemptCount, &n.MaxAttempts, &n.LastError, &n.SentAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 			return nil, err
 		}
 		notifications = append(notifications, n)

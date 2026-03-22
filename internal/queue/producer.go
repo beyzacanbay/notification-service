@@ -47,6 +47,20 @@ func (p *Producer) EnqueueWithDelay(ctx context.Context, id uuid.UUID, priority 
 	return nil
 }
 
+func (p *Producer) EnqueueAt(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel, at time.Time) error {
+	queueName := model.QueueName(priority, channel)
+	score := float64(at.UnixMilli())
+
+	err := p.client.ZAdd(ctx, queueName, redis.Z{
+		Score:  score,
+		Member: id.String(),
+	}).Err()
+	if err != nil {
+		return fmt.Errorf("enqueue at notification %s to %s: %w", id, queueName, err)
+	}
+	return nil
+}
+
 func (p *Producer) GetQueueDepth(ctx context.Context) (map[string]int64, error) {
 	depths := make(map[string]int64)
 	for _, name := range model.AllQueueNames() {

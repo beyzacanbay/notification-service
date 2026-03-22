@@ -30,6 +30,11 @@ func (m *mockProducer) Enqueue(_ context.Context, id uuid.UUID, _ model.Priority
 	return m.err
 }
 
+func (m *mockProducer) EnqueueAt(_ context.Context, id uuid.UUID, _ model.Priority, _ model.Channel, _ time.Time) error {
+	m.lastID = id
+	return m.err
+}
+
 type mockRepo struct {
 	notifications map[uuid.UUID]*model.Notification
 	err           error

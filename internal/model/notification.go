@@ -83,6 +83,7 @@ type Notification struct {
 	Status         Status     `json:"status"`
 	AttemptCount   int        `json:"attempt_count"`
 	MaxAttempts    int        `json:"max_attempts"`
+	ScheduledAt    *time.Time `json:"scheduled_at,omitempty"`
 	LastError      *string    `json:"last_error,omitempty"`
 	SentAt         *time.Time `json:"sent_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`

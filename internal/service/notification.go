@@ -20,6 +20,7 @@ const idempotencyTTL = 24 * time.Hour
 
 type Enqueuer interface {
 	Enqueue(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel) error
+	EnqueueAt(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel, at time.Time) error
 }
 
 type NotificationService struct {
@@ -60,6 +61,7 @@ func (s *NotificationService) Create(ctx context.Context, req *dto.CreateNotific
 		Content:     req.Content,
 		Priority:    priority,
 		Status:      model.StatusPending,
+		ScheduledAt: req.ScheduledAt,
 		MaxAttempts: 3,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -74,8 +76,15 @@ func (s *NotificationService) Create(ctx context.Context, req *dto.CreateNotific
 		s.redis.Set(ctx, idemKey, n.ID.String(), idempotencyTTL)
 	}
 
-	if err := s.producer.Enqueue(ctx, n.ID, n.Priority, n.Channel); err != nil {
-		return nil, fmt.Errorf("enqueue notification: %w", err)
+	// Scheduled → enqueue with future score, immediate → enqueue now
+	if n.ScheduledAt != nil {
+		if err := s.producer.EnqueueAt(ctx, n.ID, n.Priority, n.Channel, *n.ScheduledAt); err != nil {
+			return nil, fmt.Errorf("enqueue scheduled notification: %w", err)
+		}
+	} else {
+		if err := s.producer.Enqueue(ctx, n.ID, n.Priority, n.Channel); err != nil {
+			return nil, fmt.Errorf("enqueue notification: %w", err)
+		}
 	}
 
 	return n, nil

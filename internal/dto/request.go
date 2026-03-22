@@ -7,10 +7,11 @@ import (
 )
 
 type CreateNotificationRequest struct {
-	Channel   model.Channel   `json:"channel"`
-	Recipient string          `json:"recipient"`
-	Content   string          `json:"content"`
-	Priority  *model.Priority `json:"priority,omitempty"`
+	Channel     model.Channel   `json:"channel"`
+	Recipient   string          `json:"recipient"`
+	Content     string          `json:"content"`
+	Priority    *model.Priority `json:"priority,omitempty"`
+	ScheduledAt *time.Time      `json:"scheduled_at,omitempty"`
 }
 
 type BatchCreateRequest struct {
