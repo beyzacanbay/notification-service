@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/beyzacanbay/notification-service/internal/model"
+	"github.com/beyzacanbay/notification-service/internal/tracing"
 )
 
 type Producer struct {
@@ -20,6 +21,8 @@ func NewProducer(client *redis.Client) *Producer {
 }
 
 func (p *Producer) Enqueue(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel) error {
+	tracing.InjectTraceContext(ctx, p.client, id.String())
+
 	queueName := model.QueueName(priority, channel)
 	score := float64(time.Now().UnixMilli())
 
@@ -29,6 +32,22 @@ func (p *Producer) Enqueue(ctx context.Context, id uuid.UUID, priority model.Pri
 	}).Err()
 	if err != nil {
 		return fmt.Errorf("enqueue notification %s to %s: %w", id, queueName, err)
+	}
+	return nil
+}
+
+func (p *Producer) EnqueueAt(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel, at time.Time) error {
+	tracing.InjectTraceContext(ctx, p.client, id.String())
+
+	queueName := model.QueueName(priority, channel)
+	score := float64(at.UnixMilli())
+
+	err := p.client.ZAdd(ctx, queueName, redis.Z{
+		Score:  score,
+		Member: id.String(),
+	}).Err()
+	if err != nil {
+		return fmt.Errorf("enqueue at notification %s to %s: %w", id, queueName, err)
 	}
 	return nil
 }
@@ -43,20 +62,6 @@ func (p *Producer) EnqueueWithDelay(ctx context.Context, id uuid.UUID, priority 
 	}).Err()
 	if err != nil {
 		return fmt.Errorf("enqueue with delay notification %s to %s: %w", id, queueName, err)
-	}
-	return nil
-}
-
-func (p *Producer) EnqueueAt(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel, at time.Time) error {
-	queueName := model.QueueName(priority, channel)
-	score := float64(at.UnixMilli())
-
-	err := p.client.ZAdd(ctx, queueName, redis.Z{
-		Score:  score,
-		Member: id.String(),
-	}).Err()
-	if err != nil {
-		return fmt.Errorf("enqueue at notification %s to %s: %w", id, queueName, err)
 	}
 	return nil
 }

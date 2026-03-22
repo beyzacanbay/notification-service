@@ -19,7 +19,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	deps := bootstrap.Init(ctx)
+	deps := bootstrap.Init(ctx, "notification-worker")
 	defer deps.Close()
 
 	cfg := deps.Config
@@ -44,7 +44,7 @@ func main() {
 	// WebSocket hub — publishes status updates to Redis Pub/Sub (API subscribes)
 	wsHub := ws.NewHub(deps.Redis, deps.Logger)
 
-	processor := worker.NewProcessor(notificationRepo, providers, rl, producer, dlq, retryCfg, wsHub, deps.Logger)
+	processor := worker.NewProcessor(notificationRepo, providers, rl, producer, dlq, retryCfg, wsHub, deps.Redis, deps.Logger)
 	dispatcher := worker.NewDispatcher(consumer, processor, cfg.Worker.Concurrency, deps.Logger)
 
 	dispatcher.Start(ctx)

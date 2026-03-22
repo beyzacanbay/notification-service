@@ -13,6 +13,12 @@ type Config struct {
 	Redis    RedisConfig
 	Worker   WorkerConfig
 	Webhook  WebhookConfig
+	Tracing  TracingConfig
+}
+
+type TracingConfig struct {
+	Endpoint string
+	Enabled  bool
 }
 
 type ServerConfig struct {
@@ -86,6 +92,10 @@ func Load() *Config {
 		Webhook: WebhookConfig{
 			URL:     getEnv("WEBHOOK_URL", "https://webhook.site/test"),
 			Timeout: getEnvDuration("WEBHOOK_TIMEOUT", 10*time.Second),
+		},
+		Tracing: TracingConfig{
+			Endpoint: getEnv("OTEL_EXPORTER_ENDPOINT", "localhost:4318"),
+			Enabled:  getEnv("OTEL_ENABLED", "true") == "true",
 		},
 	}
 }

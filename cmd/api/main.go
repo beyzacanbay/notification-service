@@ -21,7 +21,7 @@ import (
 // @BasePath /
 func main() {
 	ctx := context.Background()
-	deps := bootstrap.Init(ctx)
+	deps := bootstrap.Init(ctx, "notification-api")
 	defer deps.Close()
 
 	notificationRepo := repository.NewPostgresNotificationRepo(deps.DB)

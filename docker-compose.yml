@@ -16,6 +16,7 @@ services:
       - DB_SSL_MODE=disable
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - OTEL_EXPORTER_ENDPOINT=jaeger:4318
     depends_on:
       db:
         condition: service_healthy
@@ -42,6 +43,7 @@ services:
       - WORKER_CONCURRENCY=5
       - WORKER_RATE_LIMIT=100
       - WEBHOOK_URL=${WEBHOOK_URL:-https://webhook.site/f0eac640-19c0-49f6-a32d-be5f8bcffb1e}
+      - OTEL_EXPORTER_ENDPOINT=jaeger:4318
     depends_on:
       db:
         condition: service_healthy
@@ -50,6 +52,14 @@ services:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
 
   db:
     image: postgres:16-alpine
