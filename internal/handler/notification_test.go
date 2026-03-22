@@ -131,6 +131,49 @@ func (m *mockRepo) seedNotification(status model.Status) *model.Notification {
 	return n
 }
 
+// --- mock template repo ---
+
+type mockTemplateRepo struct {
+	templates map[uuid.UUID]*model.Template
+}
+
+func newMockTemplateRepo() *mockTemplateRepo {
+	return &mockTemplateRepo{templates: make(map[uuid.UUID]*model.Template)}
+}
+
+func (m *mockTemplateRepo) Create(_ context.Context, t *model.Template) error {
+	if t.ID == uuid.Nil {
+		t.ID = uuid.New()
+	}
+	m.templates[t.ID] = t
+	return nil
+}
+
+func (m *mockTemplateRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Template, error) {
+	if t, ok := m.templates[id]; ok {
+		return t, nil
+	}
+	return nil, repository.ErrNotFound
+}
+
+func (m *mockTemplateRepo) List(_ context.Context) ([]*model.Template, error) {
+	var result []*model.Template
+	for _, t := range m.templates {
+		result = append(result, t)
+	}
+	return result, nil
+}
+
+func (m *mockTemplateRepo) Update(_ context.Context, t *model.Template) error {
+	m.templates[t.ID] = t
+	return nil
+}
+
+func (m *mockTemplateRepo) Delete(_ context.Context, id uuid.UUID) error {
+	delete(m.templates, id)
+	return nil
+}
+
 func setupApp(repo *mockRepo, producer *mockProducer) *fiber.App {
 	svc := service.NewNotificationService(repo, producer, nil) // nil redis = skip idempotency
 	app := fiber.New()

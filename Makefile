@@ -1,4 +1,4 @@
-.PHONY: run-api run-worker build test lint migrate-up migrate-down docker-up docker-down clean
+.PHONY: run-api run-worker build test test-e2e test-unit lint migrate-up migrate-down docker-up docker-down clean
 
 # Run locally
 run-api:
@@ -12,9 +12,17 @@ build:
 	go build -o bin/api ./cmd/api
 	go build -o bin/worker ./cmd/worker
 
-# Run tests
+# Run all tests
 test:
 	go test ./... -v -race -count=1
+
+# Run only e2e tests
+test-e2e:
+	go test ./internal/handler/ -v -race -count=1 -run TestE2E
+
+# Run only unit tests (exclude e2e)
+test-unit:
+	go test ./... -v -race -count=1 -run "^Test[^E]"
 
 # Run linter
 lint:
