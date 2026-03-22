@@ -23,6 +23,7 @@ Event-driven notification system that processes and delivers messages through mu
 ```bash
 curl -sS -X POST "https://notification-service-production-fa83.up.railway.app/api/v1/notifications" \
   -H "Content-Type: application/json" \
+  -H "Idempotency-Key: demo-$(date +%s)" \
   -d '{
     "channel": "push",
     "recipient": "example-device-token",
@@ -30,7 +31,7 @@ curl -sS -X POST "https://notification-service-production-fa83.up.railway.app/ap
   }'
 ```
 
-**2. See it arrive** at [webhook.site](https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e) — the worker’s HTTP POST shows up within seconds.
+**2. See it arrive** at [https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e](https://webhook.site/#!/view/f0eac640-19c0-49f6-a32d-be5f8bcffb1e) — the worker’s HTTP POST shows up within seconds.
 
 **3. Browse the API docs** — full Swagger UI is live at [`/swagger`](https://notification-service-production-fa83.up.railway.app/swagger/)
 
