@@ -17,7 +17,7 @@ import (
 // @title Notification Service API
 // @version 1.0
 // @description Event-driven notification system for processing and delivering messages through multiple channels (SMS, Email, Push).
-// @host localhost:8081
+// @host notification-service-production-fa83.up.railway.app
 // @BasePath /
 func main() {
 	ctx := context.Background()
