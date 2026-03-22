@@ -38,7 +38,7 @@ func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository
 	app.Static("/docs", "./docs")
 
 	// Services
-	notifSvc := service.NewNotificationService(notifRepo, producer)
+	notifSvc := service.NewNotificationService(notifRepo, producer, redisClient)
 	templateSvc := service.NewTemplateService(templateRepo)
 
 	// API v1

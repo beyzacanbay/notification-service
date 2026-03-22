@@ -74,10 +74,9 @@ const (
 )
 
 type Notification struct {
-	ID             uuid.UUID  `json:"id"`
-	BatchID        *uuid.UUID `json:"batch_id,omitempty"`
-	IdempotencyKey string     `json:"idempotency_key,omitempty"`
-	Channel        Channel    `json:"channel"`
+	ID      uuid.UUID  `json:"id"`
+	BatchID *uuid.UUID `json:"batch_id,omitempty"`
+	Channel Channel    `json:"channel"`
 	Recipient      string     `json:"recipient"`
 	Content        string     `json:"content"`
 	Priority       Priority   `json:"priority"`

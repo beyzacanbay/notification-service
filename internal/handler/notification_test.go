@@ -64,15 +64,6 @@ func (m *mockRepo) GetByID(_ context.Context, id uuid.UUID) (*model.Notification
 	return nil, repository.ErrNotFound
 }
 
-func (m *mockRepo) GetByIdempotencyKey(_ context.Context, key string) (*model.Notification, error) {
-	for _, n := range m.notifications {
-		if n.IdempotencyKey == key {
-			return n, nil
-		}
-	}
-	return nil, repository.ErrNotFound
-}
-
 func (m *mockRepo) GetByBatchID(_ context.Context, batchID uuid.UUID) ([]*model.Notification, error) {
 	var result []*model.Notification
 	for _, n := range m.notifications {
@@ -136,7 +127,7 @@ func (m *mockRepo) seedNotification(status model.Status) *model.Notification {
 }
 
 func setupApp(repo *mockRepo, producer *mockProducer) *fiber.App {
-	svc := service.NewNotificationService(repo, producer)
+	svc := service.NewNotificationService(repo, producer, nil) // nil redis = skip idempotency
 	app := fiber.New()
 	h := NewNotificationHandler(svc, nil)
 	h.RegisterRoutes(app.Group("/api/v1/notifications"))

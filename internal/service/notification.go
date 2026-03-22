@@ -2,17 +2,21 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/beyzacanbay/notification-service/internal/dto"
 	"github.com/beyzacanbay/notification-service/internal/model"
 	"github.com/beyzacanbay/notification-service/internal/repository"
 	"github.com/beyzacanbay/notification-service/internal/validator"
 )
+
+const idempotencyTTL = 24 * time.Hour
 
 type Enqueuer interface {
 	Enqueue(ctx context.Context, id uuid.UUID, priority model.Priority, channel model.Channel) error
@@ -21,18 +25,26 @@ type Enqueuer interface {
 type NotificationService struct {
 	repo     repository.NotificationRepository
 	producer Enqueuer
+	redis    *redis.Client
 }
 
-func NewNotificationService(repo repository.NotificationRepository, producer Enqueuer) *NotificationService {
-	return &NotificationService{repo: repo, producer: producer}
+func NewNotificationService(repo repository.NotificationRepository, producer Enqueuer, redisClient *redis.Client) *NotificationService {
+	return &NotificationService{repo: repo, producer: producer, redis: redisClient}
 }
 
 func (s *NotificationService) Create(ctx context.Context, req *dto.CreateNotificationRequest, idempotencyKey string) (*model.Notification, error) {
-	// Idempotency check
-	if idempotencyKey != "" {
-		existing, err := s.repo.GetByIdempotencyKey(ctx, idempotencyKey)
-		if err == nil && existing != nil {
-			return existing, nil
+	// Idempotency: explicit key from header, fallback to auto-hash
+	idemKey := idempotencyKey
+	if idemKey == "" {
+		idemKey = idempotencyHash(req.Channel, req.Recipient, req.Content)
+	}
+	idemKey = "idempotency:" + idemKey
+	if s.redis != nil {
+		if existingID, err := s.redis.Get(ctx, idemKey).Result(); err == nil {
+			id, _ := uuid.Parse(existingID)
+			if existing, err := s.repo.GetByID(ctx, id); err == nil {
+				return existing, nil
+			}
 		}
 	}
 
@@ -42,20 +54,24 @@ func (s *NotificationService) Create(ctx context.Context, req *dto.CreateNotific
 	}
 
 	n := &model.Notification{
-		ID:             uuid.New(),
-		IdempotencyKey: idempotencyKey,
-		Channel:        req.Channel,
-		Recipient:      req.Recipient,
-		Content:        req.Content,
-		Priority:       priority,
-		Status:         model.StatusPending,
-		MaxAttempts:    3,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:          uuid.New(),
+		Channel:     req.Channel,
+		Recipient:   req.Recipient,
+		Content:     req.Content,
+		Priority:    priority,
+		Status:      model.StatusPending,
+		MaxAttempts: 3,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 
 	if err := s.repo.Create(ctx, n); err != nil {
 		return nil, fmt.Errorf("save notification: %w", err)
+	}
+
+	// Cache idempotency key with 24h TTL
+	if s.redis != nil {
+		s.redis.Set(ctx, idemKey, n.ID.String(), idempotencyTTL)
 	}
 
 	if err := s.producer.Enqueue(ctx, n.ID, n.Priority, n.Channel); err != nil {
@@ -170,4 +186,9 @@ func (s *NotificationService) List(ctx context.Context, filter *dto.ListNotifica
 
 	totalPages := int(math.Ceil(float64(total) / float64(filter.PerPage)))
 	return data, total, totalPages, nil
+}
+
+func idempotencyHash(channel model.Channel, recipient, content string) string {
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s", channel, recipient, content)))
+	return fmt.Sprintf("%x", hash[:16])
 }

@@ -319,7 +319,7 @@ func (h *NotificationHandler) SendFromTemplate(c *fiber.Ctx) error {
 		Priority:  req.Priority,
 	}
 
-	n, err := h.svc.Create(c.UserContext(), notifReq, "")
+	n, err := h.svc.Create(c.UserContext(), notifReq, c.Get("Idempotency-Key"))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(dto.ErrorResponse{
 			Error:   "failed to create notification",
