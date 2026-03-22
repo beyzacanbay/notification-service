@@ -4,11 +4,14 @@ import (
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/adaptor"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/gofiber/swagger"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/beyzacanbay/notification-service/internal/handler"
+	_ "github.com/beyzacanbay/notification-service/internal/metrics" // register prometheus metrics
 	"github.com/beyzacanbay/notification-service/internal/middleware"
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/repository"
@@ -28,13 +31,13 @@ func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository
 	app.Use(middleware.CorrelationID())
 	app.Use(middleware.RequestLogger(logger))
 
-	// Health & metrics
+	// Prometheus metrics (business metrics only)
+	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
+
+	// Health
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 	app.Get("/health", healthHandler.Liveness)
 	app.Get("/ready", healthHandler.Readiness)
-
-	metricsHandler := handler.NewMetricsHandler(notifRepo, producer)
-	app.Get("/metrics", metricsHandler.Metrics)
 
 	// Swagger
 	app.Get("/swagger/*", swagger.HandlerDefault)

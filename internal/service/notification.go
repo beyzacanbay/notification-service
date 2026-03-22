@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/beyzacanbay/notification-service/internal/dto"
+	"github.com/beyzacanbay/notification-service/internal/metrics"
 	"github.com/beyzacanbay/notification-service/internal/model"
 	"github.com/beyzacanbay/notification-service/internal/repository"
 	"github.com/beyzacanbay/notification-service/internal/validator"
@@ -86,6 +87,8 @@ func (s *NotificationService) Create(ctx context.Context, req *dto.CreateNotific
 			return nil, fmt.Errorf("enqueue notification: %w", err)
 		}
 	}
+
+	metrics.NotificationCreated.WithLabelValues(string(n.Channel), n.Priority.String()).Inc()
 
 	return n, nil
 }

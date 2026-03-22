@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/beyzacanbay/notification-service/internal/bootstrap"
 	"github.com/beyzacanbay/notification-service/internal/delivery"
+	_ "github.com/beyzacanbay/notification-service/internal/metrics" // register prometheus metrics
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/ratelimiter"
 	"github.com/beyzacanbay/notification-service/internal/repository"
@@ -41,13 +45,22 @@ func main() {
 		MaxDelay:  cfg.Worker.RetryMaxDelay,
 	}
 
-	// WebSocket hub — publishes status updates to Redis Pub/Sub (API subscribes)
 	wsHub := ws.NewHub(deps.Redis, deps.Logger)
 
 	processor := worker.NewProcessor(notificationRepo, providers, rl, producer, dlq, retryCfg, wsHub, deps.Redis, deps.Logger)
 	dispatcher := worker.NewDispatcher(consumer, processor, cfg.Worker.Concurrency, deps.Logger)
 
 	dispatcher.Start(ctx)
+
+	// Metrics endpoint for Prometheus scraping
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		deps.Logger.Info("worker metrics server starting", "port", 9090)
+		if err := http.ListenAndServe(":9090", mux); err != nil {
+			deps.Logger.Error("metrics server error", "error", err)
+		}
+	}()
 
 	deps.Logger.Info("worker started",
 		"concurrency", cfg.Worker.Concurrency,

@@ -104,7 +104,7 @@ Both processes are independently deployable and horizontally scalable.
 |--------|------|-------------|
 | `GET` | `/health` | Liveness check |
 | `GET` | `/ready` | Readiness check (pings DB & Redis) |
-| `GET` | `/metrics` | Queue depth, success/failure rates, avg latency |
+| `GET` | `/metrics` | Prometheus metrics (HTTP + business) |
 | `GET` | `/swagger/` | Swagger UI |
 | `WS` | `/ws/notifications` | Real-time status updates via WebSocket |
 
@@ -212,7 +212,7 @@ Both stored in Redis with 24h TTL. No database pollution.
 - **Structured logging**: JSON format, every log includes correlation ID
 - **Correlation IDs**: Auto-generated per request, propagated through context, included in response headers
 - **Distributed tracing**: OpenTelemetry → Jaeger. API and Worker spans linked via Redis trace context propagation — single trace shows full notification lifecycle
-- **Metrics endpoint**: Queue depth per priority/channel, success/failure rates, average delivery latency
+- **Prometheus metrics**: `/metrics` endpoint exposes HTTP request metrics (count, latency histogram, status codes) and business metrics (notifications created/delivered/failed/retried per channel, delivery duration histogram, rate limit hits)
 - **Health checks**: `/health` (liveness), `/ready` (dependency health — pings PostgreSQL and Redis)
 - **WebSocket**: Real-time push updates when notification status changes (sent/failed)
 

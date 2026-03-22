@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -11,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/beyzacanbay/notification-service/internal/delivery"
+	"github.com/beyzacanbay/notification-service/internal/metrics"
 	"github.com/beyzacanbay/notification-service/internal/model"
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/ratelimiter"
@@ -110,6 +112,7 @@ func (p *Processor) Process(ctx context.Context, notificationID string) error {
 	}
 	if !allowed {
 		span.SetAttributes(attribute.Bool("rate_limited", true))
+		metrics.NotificationRateLimited.WithLabelValues(string(n.Channel)).Inc()
 		log.Debug("rate limited, re-enqueueing")
 		return p.requeue(ctx, n, "rate limited")
 	}
@@ -120,9 +123,13 @@ func (p *Processor) Process(ctx context.Context, notificationID string) error {
 	}
 
 	// Attempt delivery
+	deliveryStart := time.Now()
 	_, deliverySpan := tracer.Start(ctx, "Delivery.Send")
 	result, err := provider.Send(ctx, n)
 	deliverySpan.End()
+	deliveryDuration := time.Since(deliveryStart).Seconds()
+	metrics.DeliveryDuration.WithLabelValues(string(n.Channel)).Observe(deliveryDuration)
+
 	if err != nil {
 		span.RecordError(err)
 		deliverySpan.RecordError(err)
@@ -131,6 +138,7 @@ func (p *Processor) Process(ctx context.Context, notificationID string) error {
 	}
 
 	// Success
+	metrics.NotificationDelivered.WithLabelValues(string(n.Channel)).Inc()
 	span.SetAttributes(attribute.String("status", "sent"))
 	log.Info("notification delivered", "message_id", result.MessageID, "channel", n.Channel)
 
@@ -161,6 +169,7 @@ func (p *Processor) handleFailure(ctx context.Context, n *model.Notification, de
 
 	// Permanent error — don't retry
 	if !delivery.IsRetryable(deliveryErr) {
+		metrics.NotificationFailed.WithLabelValues(string(n.Channel), "permanent").Inc()
 		p.logger.Warn("permanent delivery error, sending to DLQ", "notification_id", n.ID, "error", errMsg)
 		if err := p.repo.UpdateStatus(ctx, n.ID, model.StatusFailed, &errMsg); err != nil {
 			return err
@@ -176,6 +185,7 @@ func (p *Processor) handleFailure(ctx context.Context, n *model.Notification, de
 
 	nextAttempt := n.AttemptCount + 1
 	if nextAttempt >= n.MaxAttempts {
+		metrics.NotificationFailed.WithLabelValues(string(n.Channel), "max_retries").Inc()
 		p.logger.Warn("max retries reached, sending to DLQ", "notification_id", n.ID, "attempts", nextAttempt)
 		if err := p.repo.UpdateStatus(ctx, n.ID, model.StatusFailed, &errMsg); err != nil {
 			return err
@@ -186,6 +196,7 @@ func (p *Processor) handleFailure(ctx context.Context, n *model.Notification, de
 	}
 
 	// Retryable — re-enqueue with exponential backoff
+	metrics.NotificationRetried.WithLabelValues(string(n.Channel)).Inc()
 	delay := delivery.CalculateBackoff(nextAttempt, p.retryCfg)
 	p.logger.Info("retrying notification", "notification_id", n.ID, "attempt", nextAttempt, "delay", delay)
 
