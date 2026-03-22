@@ -13,9 +13,10 @@ import (
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/repository"
 	"github.com/beyzacanbay/notification-service/internal/service"
+	ws "github.com/beyzacanbay/notification-service/internal/websocket"
 )
 
-func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository.NotificationRepository, templateRepo repository.TemplateRepository, producer *queue.Producer, logger *slog.Logger) *fiber.App {
+func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository.NotificationRepository, templateRepo repository.TemplateRepository, producer *queue.Producer, wsHub *ws.Hub, logger *slog.Logger) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "Notification System",
 		ServerHeader: "Fiber",
@@ -36,6 +37,10 @@ func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository
 
 	// Swagger
 	app.Get("/swagger/*", swagger.HandlerDefault)
+
+	// WebSocket
+	app.Use("/ws", ws.UpgradeMiddleware())
+	app.Get("/ws/notifications", wsHub.Handler())
 
 	// Services
 	notifSvc := service.NewNotificationService(notifRepo, producer, redisClient)

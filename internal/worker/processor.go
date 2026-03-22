@@ -12,6 +12,7 @@ import (
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/ratelimiter"
 	"github.com/beyzacanbay/notification-service/internal/repository"
+	ws "github.com/beyzacanbay/notification-service/internal/websocket"
 )
 
 type Processor struct {
@@ -21,6 +22,7 @@ type Processor struct {
 	producer    *queue.Producer
 	dlq         *queue.DLQ
 	retryCfg    delivery.RetryConfig
+	hub         *ws.Hub
 	logger      *slog.Logger
 }
 
@@ -31,6 +33,7 @@ func NewProcessor(
 	producer *queue.Producer,
 	dlq *queue.DLQ,
 	retryCfg delivery.RetryConfig,
+	hub *ws.Hub,
 	logger *slog.Logger,
 ) *Processor {
 	return &Processor{
@@ -40,6 +43,7 @@ func NewProcessor(
 		producer:    producer,
 		dlq:         dlq,
 		retryCfg:    retryCfg,
+		hub:         hub,
 		logger:      logger,
 	}
 }
@@ -97,6 +101,7 @@ func (p *Processor) Process(ctx context.Context, notificationID string) error {
 	if err := p.repo.MarkSent(ctx, id); err != nil {
 		return fmt.Errorf("mark sent: %w", err)
 	}
+	p.hub.BroadcastStatus(id.String(), string(model.StatusSent))
 	return nil
 }
 
@@ -121,6 +126,7 @@ func (p *Processor) handleFailure(ctx context.Context, n *model.Notification, de
 			return err
 		}
 		p.dlq.Push(ctx, n.ID, errMsg)
+		p.hub.BroadcastStatus(n.ID.String(), string(model.StatusFailed))
 		return nil
 	}
 
@@ -135,6 +141,7 @@ func (p *Processor) handleFailure(ctx context.Context, n *model.Notification, de
 			return err
 		}
 		p.dlq.Push(ctx, n.ID, errMsg)
+		p.hub.BroadcastStatus(n.ID.String(), string(model.StatusFailed))
 		return nil
 	}
 

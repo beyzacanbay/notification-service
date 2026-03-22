@@ -11,6 +11,7 @@ import (
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/ratelimiter"
 	"github.com/beyzacanbay/notification-service/internal/repository"
+	ws "github.com/beyzacanbay/notification-service/internal/websocket"
 	"github.com/beyzacanbay/notification-service/internal/worker"
 )
 
@@ -40,7 +41,10 @@ func main() {
 		MaxDelay:  cfg.Worker.RetryMaxDelay,
 	}
 
-	processor := worker.NewProcessor(notificationRepo, providers, rl, producer, dlq, retryCfg, deps.Logger)
+	// WebSocket hub — publishes status updates to Redis Pub/Sub (API subscribes)
+	wsHub := ws.NewHub(deps.Redis, deps.Logger)
+
+	processor := worker.NewProcessor(notificationRepo, providers, rl, producer, dlq, retryCfg, wsHub, deps.Logger)
 	dispatcher := worker.NewDispatcher(consumer, processor, cfg.Worker.Concurrency, deps.Logger)
 
 	dispatcher.Start(ctx)

@@ -9,6 +9,7 @@ import (
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/repository"
 	"github.com/beyzacanbay/notification-service/internal/server"
+	ws "github.com/beyzacanbay/notification-service/internal/websocket"
 
 	_ "github.com/beyzacanbay/notification-service/docs/swagger" // swagger docs
 )
@@ -27,7 +28,11 @@ func main() {
 	templateRepo := repository.NewPostgresTemplateRepo(deps.DB)
 	producer := queue.NewProducer(deps.Redis)
 
-	app := server.NewServer(deps.DB, deps.Redis, notificationRepo, templateRepo, producer, deps.Logger)
+	// WebSocket hub — subscribes to Redis Pub/Sub for status updates from workers
+	wsHub := ws.NewHub(deps.Redis, deps.Logger)
+	go wsHub.Subscribe(ctx)
+
+	app := server.NewServer(deps.DB, deps.Redis, notificationRepo, templateRepo, producer, wsHub, deps.Logger)
 
 	addr := fmt.Sprintf(":%d", deps.Config.Server.Port)
 	deps.Logger.Info("API server starting", "port", deps.Config.Server.Port)
