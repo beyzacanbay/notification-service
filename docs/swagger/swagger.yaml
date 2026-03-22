@@ -1,0 +1,549 @@
+basePath: /
+definitions:
+  dto.BatchCreateRequest:
+    properties:
+      notifications:
+        items:
+          $ref: '#/definitions/dto.CreateNotificationRequest'
+        type: array
+    type: object
+  dto.BatchCreateResponse:
+    properties:
+      batch_id:
+        type: string
+      errors:
+        items:
+          $ref: '#/definitions/dto.BatchItemError'
+        type: array
+      notifications:
+        items:
+          $ref: '#/definitions/dto.NotificationResponse'
+        type: array
+      total_created:
+        type: integer
+      total_failed:
+        type: integer
+    type: object
+  dto.BatchItemError:
+    properties:
+      details: {}
+      index:
+        type: integer
+    type: object
+  dto.CreateNotificationRequest:
+    properties:
+      channel:
+        $ref: '#/definitions/model.Channel'
+      content:
+        type: string
+      priority:
+        $ref: '#/definitions/model.Priority'
+      recipient:
+        type: string
+    type: object
+  dto.CreateTemplateRequest:
+    properties:
+      channel:
+        $ref: '#/definitions/model.Channel'
+      content_template:
+        type: string
+      name:
+        type: string
+    type: object
+  dto.ErrorResponse:
+    properties:
+      details: {}
+      error:
+        type: string
+    type: object
+  dto.HealthResponse:
+    properties:
+      services:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        type: string
+    type: object
+  dto.MetricsResponse:
+    properties:
+      avg_latency_ms:
+        type: number
+      failure_rate:
+        type: number
+      queue_depth:
+        additionalProperties:
+          type: integer
+        type: object
+      success_rate:
+        type: number
+      total_failed:
+        type: integer
+      total_pending:
+        type: integer
+      total_sent:
+        type: integer
+    type: object
+  dto.NotificationResponse:
+    properties:
+      attempt_count:
+        type: integer
+      batch_id:
+        type: string
+      channel:
+        $ref: '#/definitions/model.Channel'
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      last_error:
+        type: string
+      max_attempts:
+        type: integer
+      priority:
+        $ref: '#/definitions/model.Priority'
+      recipient:
+        type: string
+      sent_at:
+        type: string
+      status:
+        $ref: '#/definitions/model.Status'
+      updated_at:
+        type: string
+    type: object
+  dto.PaginatedResponse:
+    properties:
+      data: {}
+      page:
+        type: integer
+      per_page:
+        type: integer
+      total_items:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  dto.SendFromTemplateRequest:
+    properties:
+      params:
+        additionalProperties: true
+        type: object
+      priority:
+        $ref: '#/definitions/model.Priority'
+      recipient:
+        type: string
+      template_id:
+        type: string
+    type: object
+  model.Channel:
+    enum:
+    - sms
+    - email
+    - push
+    type: string
+    x-enum-varnames:
+    - ChannelSMS
+    - ChannelEmail
+    - ChannelPush
+  model.Priority:
+    enum:
+    - 0
+    - 1
+    - 2
+    type: integer
+    x-enum-varnames:
+    - PriorityHigh
+    - PriorityNormal
+    - PriorityLow
+  model.Status:
+    enum:
+    - pending
+    - queued
+    - processing
+    - sent
+    - failed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - StatusPending
+    - StatusQueued
+    - StatusProcessing
+    - StatusSent
+    - StatusFailed
+    - StatusCancelled
+  model.Template:
+    properties:
+      channel:
+        $ref: '#/definitions/model.Channel'
+      content_template:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+host: localhost:8081
+info:
+  contact: {}
+  description: Event-driven notification system for processing and delivering messages
+    through multiple channels (SMS, Email, Push).
+  title: Notification Service API
+  version: "1.0"
+paths:
+  /api/v1/notifications:
+    get:
+      parameters:
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by channel
+        in: query
+        name: channel
+        type: string
+      - description: Start date (RFC3339)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (RFC3339)
+        in: query
+        name: end_date
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: per_page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+      summary: List notifications with filtering and pagination
+      tags:
+      - Notifications
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Notification request
+        in: body
+        name: notification
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Create a notification
+      tags:
+      - Notifications
+  /api/v1/notifications/{id}:
+    get:
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get notification by ID
+      tags:
+      - Notifications
+  /api/v1/notifications/{id}/cancel:
+    patch:
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Cancel a pending or queued notification
+      tags:
+      - Notifications
+  /api/v1/notifications/{id}/status:
+    get:
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Query notification status by ID
+      tags:
+      - Notifications
+  /api/v1/notifications/batch:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Batch request
+        in: body
+        name: batch
+        required: true
+        schema:
+          $ref: '#/definitions/dto.BatchCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/dto.BatchCreateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Create a batch of notifications
+      tags:
+      - Notifications
+  /api/v1/notifications/batch/{batchId}/status:
+    get:
+      parameters:
+      - description: Batch ID
+        in: path
+        name: batchId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get batch status summary
+      tags:
+      - Notifications
+  /api/v1/notifications/from-template:
+    post:
+      consumes:
+      - application/json
+      description: Render a template with variables and create a notification
+      parameters:
+      - description: Template send request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendFromTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Send notification from template
+      tags:
+      - Notifications
+  /api/v1/templates:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Template'
+            type: array
+      summary: List all templates
+      tags:
+      - Templates
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Template
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Template'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Create a template
+      tags:
+      - Templates
+  /api/v1/templates/{id}:
+    delete:
+      parameters:
+      - description: Template ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a template
+      tags:
+      - Templates
+    get:
+      parameters:
+      - description: Template ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Template'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get template by ID
+      tags:
+      - Templates
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Template ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Template
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Template'
+      summary: Update a template
+      tags:
+      - Templates
+  /health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.HealthResponse'
+      summary: Health check
+      tags:
+      - Health
+  /metrics:
+    get:
+      description: Queue depth, success/failure rates
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MetricsResponse'
+      summary: Real-time system metrics
+      tags:
+      - Observability
+  /ready:
+    get:
+      description: Check if the service and its dependencies are ready
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.HealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/dto.HealthResponse'
+      summary: Readiness check
+      tags:
+      - Health
+swagger: "2.0"

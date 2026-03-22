@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/swagger"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
@@ -34,8 +35,7 @@ func NewServer(db *pgxpool.Pool, redisClient *redis.Client, notifRepo repository
 	app.Get("/metrics", metricsHandler.Metrics)
 
 	// Swagger
-	app.Get("/swagger", handler.ServeSwaggerUI)
-	app.Static("/docs", "./docs")
+	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	// Services
 	notifSvc := service.NewNotificationService(notifRepo, producer, redisClient)

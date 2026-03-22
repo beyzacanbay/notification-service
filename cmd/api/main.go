@@ -9,6 +9,8 @@ import (
 	"github.com/beyzacanbay/notification-service/internal/queue"
 	"github.com/beyzacanbay/notification-service/internal/repository"
 	"github.com/beyzacanbay/notification-service/internal/server"
+
+	_ "github.com/beyzacanbay/notification-service/docs/swagger" // swagger docs
 )
 
 // @title Notification Service API
